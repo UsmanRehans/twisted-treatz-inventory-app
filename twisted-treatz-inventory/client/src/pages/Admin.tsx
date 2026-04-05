@@ -59,8 +59,14 @@ export default function Admin() {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
-          <div className="text-sm text-gray-600 mb-2 truncate">
+        <div className="p-4 border-t border-gray-200 space-y-2">
+          <button
+            onClick={() => navigate("/app")}
+            className="w-full text-sm px-3 py-2 text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors font-medium"
+          >
+            Floor iPad View
+          </button>
+          <div className="text-sm text-gray-600 mb-1 truncate">
             {admin?.name ?? admin?.email}
           </div>
           <button

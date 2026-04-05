@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import type { TeamMember, Product } from "../api/client";
 import {
   fetchTeamMembers,
@@ -19,6 +20,9 @@ const IDLE_TIMEOUT = 30_000;
 const COUNTDOWN_START = 20_000;
 
 export default function FloorApp() {
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // ─── State ──────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>("member");
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -192,13 +196,43 @@ export default function FloorApp() {
   return (
     <div className="h-screen flex flex-col bg-gray-50 floor-app-root">
       {/* Header */}
-      <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0">
+      <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0 relative">
         <h1 className="text-[22px] font-bold tracking-tight">
           Twisted Treatz
         </h1>
-        <span className="text-[14px] text-gray-400">
-          Inventory Removal
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-[14px] text-gray-400">
+            Inventory Removal
+          </span>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="w-10 h-10 flex flex-col items-center justify-center gap-[5px] rounded-lg active:bg-gray-700"
+          >
+            <span className="block w-5 h-[2px] bg-gray-300" />
+            <span className="block w-5 h-[2px] bg-gray-300" />
+            <span className="block w-5 h-[2px] bg-gray-300" />
+          </button>
+        </div>
+
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-4 top-full mt-1 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-2 w-56">
+              <button
+                onClick={() => { setMenuOpen(false); navigate("/admin"); }}
+                className="w-full text-left px-4 py-3 text-[16px] text-gray-700 active:bg-gray-100"
+              >
+                Admin Dashboard
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); navigate("/admin/receive"); }}
+                className="w-full text-left px-4 py-3 text-[16px] text-gray-700 active:bg-gray-100"
+              >
+                Receive Inventory
+              </button>
+            </div>
+          </>
+        )}
       </header>
 
       {/* Idle countdown indicator */}
