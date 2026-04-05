@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id             Int       @id @default(autoincrement())
+  name           String
+  category       String
+  flavor         String?
+  purchaseUnit   String // "Bag", "Box", "Gallon", "Bucket" etc
+  unitSize       String? // "5 lb", "128 oz" etc
+  brand          String?
+  supplier       String?
+  usedIn         String? // which finished candy product it goes into
+  currentQty     Int       @default(0)
+  alertThreshold Int       @default(10)
+  unitPrice      Decimal?  @db.Decimal(10, 2)
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  removals       Removal[]
+  receipts       Receipt[]
+}
+
+model TeamMember {
+  id        Int       @id @default(autoincrement())
+  name      String
+  initials  String // e.g. "JR" for display avatar
+  pinHash   String // bcrypt hashed 4-digit PIN
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  removals  Removal[]
+}
+
+model Admin {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime  @default(now())
+  receipts     Receipt[]
+}
+
+model Removal {
+  id           Int        @id @default(autoincrement())
+  productId    Int
+  product      Product    @relation(fields: [productId], references: [id])
+  teamMemberId Int
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id])
+  qty          Int
+  qtyBefore    Int // snapshot of qty before removal
+  qtyAfter     Int // snapshot of qty after removal
+  createdAt    DateTime   @default(now())
+}
+
+model Receipt {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  adminId     Int
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  supplier    String?
+  expectedQty Int
+  actualQty   Int
+  unitPrice   Decimal? @db.Decimal(10, 2)
+  notes       String?
+  createdAt   DateTime @default(now())
+}
+
+model AlertLog {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  sentAt    DateTime @default(now())
+  // Prevents duplicate alerts per product per day
+}

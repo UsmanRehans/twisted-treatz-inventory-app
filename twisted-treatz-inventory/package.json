@@ -1,0 +1,11 @@
+{
+  "name": "twisted-treatz-inventory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Internal inventory management system for Twisted Treatz",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "build:server": "npm --prefix server run build"
+  }
+}
