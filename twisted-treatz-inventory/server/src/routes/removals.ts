@@ -113,8 +113,8 @@ router.post("/", requireTeamMember, async (req: TeamMemberRequest, res: Response
 });
 
 // ─── GET /api/v1/removals ─────────────────────────────────────────
-// Admin only — list removals (activity log) with filters + pagination
-router.get("/", requireAdmin, async (req: AdminRequest, res: Response) => {
+// Any authenticated user — list removals (activity log) with filters + pagination
+router.get("/", async (req: AdminRequest & TeamMemberRequest, res: Response) => {
   try {
     const {
       memberId,

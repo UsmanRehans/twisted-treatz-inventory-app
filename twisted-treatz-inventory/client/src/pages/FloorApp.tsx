@@ -13,8 +13,9 @@ import PinPad from "../components/floor/PinPad";
 import ProductGrid from "../components/floor/ProductGrid";
 import ConfirmBar from "../components/floor/ConfirmBar";
 import SuccessAnimation from "../components/floor/SuccessAnimation";
+import ActivityFeed from "../components/floor/ActivityFeed";
 
-type Step = "member" | "pin" | "browse" | "success";
+type Step = "member" | "pin" | "browse" | "activity" | "success";
 
 const IDLE_TIMEOUT = 30_000;
 const COUNTDOWN_START = 20_000;
@@ -270,6 +271,7 @@ export default function FloorApp() {
               selectedProduct={selectedProduct}
               onSelectProduct={handleProductSelect}
               onLogout={resetToStart}
+              onActivity={() => { setStep("activity"); resetIdle(); }}
               memberName={selectedMember?.name ?? ""}
               loading={productsLoading}
             />
@@ -277,6 +279,13 @@ export default function FloorApp() {
             {/* Spacer to prevent content from hiding behind fixed ConfirmBar */}
             {selectedProduct && <div className="h-[100px] flex-shrink-0" />}
           </div>
+        )}
+
+        {step === "activity" && authToken && (
+          <ActivityFeed
+            token={authToken}
+            onBack={() => { setStep("browse"); resetIdle(); }}
+          />
         )}
 
         {step === "success" && successInfo && (
