@@ -8,7 +8,7 @@ interface ProductGridProps {
   categories: string[];
   selectedProduct: Product | null;
   onSelectProduct: (product: Product) => void;
-  onBack: () => void;
+  onLogout: () => void;
   memberName: string;
   loading: boolean;
 }
@@ -18,7 +18,7 @@ export default function ProductGrid({
   categories,
   selectedProduct,
   onSelectProduct,
-  onBack,
+  onLogout,
   memberName,
   loading,
 }: ProductGridProps) {
@@ -41,13 +41,7 @@ export default function ProductGrid({
     <div className="flex flex-col h-full">
       {/* Top bar with member name, search, and back */}
       <div className="flex items-center gap-4 px-4 py-3 bg-white border-b border-gray-200">
-        <button
-          onClick={onBack}
-          className="min-h-[48px] px-4 text-[16px] text-gray-500 font-medium active:text-gray-800 flex-shrink-0"
-        >
-          &larr; Back
-        </button>
-        <span className="text-[16px] text-gray-400 flex-shrink-0">
+        <span className="text-[16px] font-medium text-gray-700 flex-shrink-0">
           {memberName}
         </span>
         <input
@@ -57,6 +51,12 @@ export default function ProductGrid({
           placeholder="Search products..."
           className="flex-1 min-h-[48px] px-4 rounded-lg border border-gray-200 bg-gray-50 text-[16px] text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400"
         />
+        <button
+          onClick={onLogout}
+          className="min-h-[48px] px-5 rounded-lg bg-red-50 text-[16px] text-red-600 font-medium active:bg-red-100 flex-shrink-0"
+        >
+          Log Out
+        </button>
       </div>
 
       {/* Category tabs */}

@@ -150,10 +150,6 @@ export default function FloorApp() {
     resetIdle();
   };
 
-  const handleProductBack = () => {
-    resetToStart();
-  };
-
   const handleCancelProduct = () => {
     setSelectedProduct(null);
     resetIdle();
@@ -176,14 +172,15 @@ export default function FloorApp() {
         )
       );
 
-      // Show success
+      // Show success briefly, then return to product browse (NOT member select)
       setSuccessInfo({ qty, productName: selectedProduct.name });
       setSelectedProduct(null);
       setStep("success");
 
-      // Auto-return to step 1 after 2 seconds
       setTimeout(() => {
-        resetToStart();
+        setSuccessInfo(null);
+        setStep("browse");
+        resetIdle();
       }, 2000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to remove inventory");
@@ -238,7 +235,7 @@ export default function FloorApp() {
               categories={categories}
               selectedProduct={selectedProduct}
               onSelectProduct={handleProductSelect}
-              onBack={handleProductBack}
+              onLogout={resetToStart}
               memberName={selectedMember?.name ?? ""}
               loading={productsLoading}
             />
