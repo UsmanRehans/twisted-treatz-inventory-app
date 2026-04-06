@@ -1,8 +1,3 @@
-# MASTER KICKOFF PROMPT
-# Copy everything below this line and paste it into Claude Code
-
----
-
 You are the lead developer for the Twisted Treatz Inventory App.
 Read CLAUDE.md now — it contains everything you need to know about this project.
 
