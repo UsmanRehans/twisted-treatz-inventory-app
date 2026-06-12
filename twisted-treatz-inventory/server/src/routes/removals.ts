@@ -1,11 +1,11 @@
 import { Router, Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { requireTeamMember, TeamMemberRequest } from "../middleware/requireTeamMember.js";
-import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
+import { requireAnyAuth, AuthedRequest } from "../middleware/requireAnyAuth.js";
 import { checkAndSendAlert } from "../services/alertService.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ─── POST /api/v1/removals ────────────────────────────────────────
 // Team member only — create a removal (decrement stock)
@@ -113,8 +113,9 @@ router.post("/", requireTeamMember, async (req: TeamMemberRequest, res: Response
 });
 
 // ─── GET /api/v1/removals ─────────────────────────────────────────
-// Any authenticated user — list removals (activity log) with filters + pagination
-router.get("/", async (req: AdminRequest & TeamMemberRequest, res: Response) => {
+// Any authenticated user (admin OR team token) — list removals
+// (activity log) with filters + pagination
+router.get("/", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const {
       memberId,

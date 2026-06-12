@@ -1,6 +1,19 @@
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "twisted-treatz-jwt-secret-2024-change-in-production";
+// A real secret is mandatory unless explicitly running in dev/test. The
+// fallback is gated behind ALLOW_DEV_SECRET so a misconfigured NODE_ENV
+// can never silently let the public fallback secret sign real tokens —
+// that would let anyone forge admin tokens.
+const allowDevSecret =
+  process.env.ALLOW_DEV_SECRET === "true" || process.env.NODE_ENV === "test";
+
+if (!process.env.JWT_SECRET && !allowDevSecret) {
+  throw new Error(
+    "JWT_SECRET environment variable must be set (or set ALLOW_DEV_SECRET=true for local dev)",
+  );
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || "twisted-treatz-dev-only-secret";
 
 export interface AdminPayload {
   type: "admin";

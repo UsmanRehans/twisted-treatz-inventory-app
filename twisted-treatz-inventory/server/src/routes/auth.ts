@@ -1,28 +1,29 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { generateAdminToken, generateTeamMemberToken } from "../services/tokenService.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
-// ─── Rate limiting for team member PIN attempts ─────────────────────
-// In-memory tracker: memberId -> { attempts, windowStart }
-const pinAttempts = new Map<number, { count: number; windowStart: number }>();
-const MAX_PIN_ATTEMPTS = 5;
-const PIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+// ─── Login rate limiting ────────────────────────────────────────────
+// In-memory tracker keyed by attempt identity:
+//   team PIN:    "pin:<memberId>"
+//   admin login: "admin:<email>" and "admin-ip:<ip>"
+const loginAttempts = new Map<string, { count: number; windowStart: number }>();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
-function checkRateLimit(memberId: number): boolean {
+function checkRateLimit(key: string): boolean {
   const now = Date.now();
-  const record = pinAttempts.get(memberId);
+  const record = loginAttempts.get(key);
 
-  if (!record || now - record.windowStart > PIN_WINDOW_MS) {
+  if (!record || now - record.windowStart > WINDOW_MS) {
     // Window expired or first attempt — reset
-    pinAttempts.set(memberId, { count: 1, windowStart: now });
+    loginAttempts.set(key, { count: 1, windowStart: now });
     return true;
   }
 
-  if (record.count >= MAX_PIN_ATTEMPTS) {
+  if (record.count >= MAX_ATTEMPTS) {
     return false; // blocked
   }
 
@@ -30,8 +31,8 @@ function checkRateLimit(memberId: number): boolean {
   return true;
 }
 
-function resetRateLimit(memberId: number): void {
-  pinAttempts.delete(memberId);
+function resetRateLimit(...keys: string[]): void {
+  for (const key of keys) loginAttempts.delete(key);
 }
 
 // ─── POST /api/v1/auth/admin/login ──────────────────────────────────
@@ -39,11 +40,23 @@ router.post("/admin/login", async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || typeof email !== "string" || typeof password !== "string") {
       res.status(400).json({
         success: false,
         data: null,
         error: "Email and password are required",
+      });
+      return;
+    }
+
+    // Rate limit by email and by source IP (5 failures / 15 min each)
+    const emailKey = `admin:${email.toLowerCase()}`;
+    const ipKey = `admin-ip:${req.ip}`;
+    if (!checkRateLimit(emailKey) || !checkRateLimit(ipKey)) {
+      res.status(429).json({
+        success: false,
+        data: null,
+        error: "Too many failed attempts. Try again in 15 minutes.",
       });
       return;
     }
@@ -69,6 +82,9 @@ router.post("/admin/login", async (req: Request, res: Response) => {
       });
       return;
     }
+
+    // Successful — clear failure counters
+    resetRateLimit(emailKey, ipKey);
 
     const token = generateAdminToken({ id: admin.id, email: admin.email });
 
@@ -98,7 +114,7 @@ router.post("/team/verify", async (req: Request, res: Response) => {
   try {
     const { memberId, pin } = req.body;
 
-    if (!memberId || !pin) {
+    if (!memberId || !pin || !Number.isInteger(Number(memberId))) {
       res.status(400).json({
         success: false,
         data: null,
@@ -108,7 +124,7 @@ router.post("/team/verify", async (req: Request, res: Response) => {
     }
 
     // Rate limit check
-    if (!checkRateLimit(memberId)) {
+    if (!checkRateLimit(`pin:${Number(memberId)}`)) {
       res.status(429).json({
         success: false,
         data: null,
@@ -142,7 +158,7 @@ router.post("/team/verify", async (req: Request, res: Response) => {
     }
 
     // Successful — reset rate limit counter
-    resetRateLimit(member.id);
+    resetRateLimit(`pin:${member.id}`);
 
     const token = generateTeamMemberToken({
       id: member.id,

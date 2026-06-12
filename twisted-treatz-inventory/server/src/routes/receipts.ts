@@ -1,9 +1,9 @@
 import { Router, Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ─── POST /api/v1/receipts ───────────────────────────────────────
 // Admin only — record a received shipment (increment stock)

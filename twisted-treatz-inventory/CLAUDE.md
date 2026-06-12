@@ -61,6 +61,27 @@ This is a private tool used exclusively by the owner and 6 team members.
 - One alert per product per day (no spam)
 - SendGrid for delivery
 
+## Invariants — every change is checked against these
+- Stock changes are transactional: qty update + audit record (Removal/Receipt) commit together, with qtyBefore/qtyAfter snapshots on removals
+- Stock never goes negative; removals exceeding currentQty are rejected
+- Receipts increment stock by ACTUAL counted qty, never the PO's expected qty
+- Team members can only remove stock; only admins can add stock
+- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/*`, `GET /health`. Reads accept admin OR team tokens (`requireAnyAuth`); writes are role-specific
+- `pinHash` / `passwordHash` never appear in any API response
+- Both login flows are rate limited (5 attempts / 15 min, in-memory)
+- `JWT_SECRET` must be set in production — the server refuses to boot without it
+- Alerts fire at-or-below threshold, max once per product per day
+
+## Testing — run before claiming anything works
+- `cd server && npm test` — vitest + supertest suite in `server/tests/` (auth matrix, login flows, stock math, alert rules). Prisma is mocked via the shared client in `server/src/lib/prisma.ts` — always import `prisma` from there, never `new PrismaClient()`
+- `cd server && npx tsc --noEmit` — server types
+- `cd client && npm run build` — client types + build
+- New invariant-touching code needs a test in `server/tests/` before it ships
+
+## Agent roster
+- **Active**: `qa-agent` (verifies every change — run via `/qa`), `security-agent` (cybersecurity audits — run via `/security-sweep`)
+- **Retired blueprints**: `database-agent`, `auth-agent`, `alert-agent`, `ipad-ui-agent`, `admin-agent` were build-time specs for the original construction (see `docs/MASTER_KICKOFF_PROMPT.md`). They describe intent, not current state — useful as reference, don't re-run them
+
 ## Code Standards
 - ESM imports only (no require())
 - TypeScript preferred
