@@ -1,95 +1,35 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAdminAuth } from "../hooks/useAdminAuth";
+import AdminSidebar, {
+  ADMIN_TABS,
+  type AdminTab,
+} from "../components/admin/AdminSidebar";
 import StatCards from "../components/admin/StatCards";
 import ProductTable from "../components/admin/ProductTable";
 import TeamMemberCards from "../components/admin/TeamMemberCards";
 import ActivityLog from "../components/admin/ActivityLog";
 import ChangePassword from "../components/admin/ChangePassword";
 
-// "settings" is reachable from the account zone (sidebar footer), not the
-// primary nav — it's an account action, not an inventory view.
-type Tab = "overview" | "products" | "team" | "activity" | "receiving" | "settings";
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "overview", label: "Overview", icon: "[=]" },
-  { id: "products", label: "Products", icon: "[#]" },
-  { id: "team", label: "Team", icon: "[o]" },
-  { id: "activity", label: "Activity Log", icon: "[>]" },
-  { id: "receiving", label: "Receiving", icon: "[+]" },
-];
+// Dashboard tabs are client state on this page; "receiving" is its own
+// route. Other pages (e.g. Receiving) can deep-link a tab by navigating
+// here with { state: { tab } }.
+type Tab = Exclude<AdminTab, "receiving">;
 
 export default function Admin() {
-  const { token, admin, isAuthenticated, logout } = useAdminAuth();
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const navigate = useNavigate();
+  const { token, isAuthenticated } = useAdminAuth();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<Tab>(
+    (location.state as { tab?: Tab } | null)?.tab ?? "overview",
+  );
 
   if (!isAuthenticated || !token) {
     return <Navigate to="/admin/login" replace />;
   }
 
-  function handleTabClick(tab: Tab) {
-    if (tab === "receiving") {
-      navigate("/admin/receive");
-      return;
-    }
-    setActiveTab(tab);
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className="w-60 bg-white border-r border-gray-200 flex flex-col min-h-screen">
-        <div className="p-5 border-b border-gray-200">
-          <h1 className="text-lg font-bold text-gray-900">Twisted Treatz</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Admin Dashboard</p>
-        </div>
-
-        <nav className="flex-1 p-3 space-y-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabClick(tab.id)}
-              className={`w-full text-left px-3 py-2.5 rounded-md text-sm font-medium flex items-center gap-2.5 transition-colors ${
-                activeTab === tab.id
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-              }`}
-            >
-              <span className="text-xs font-mono opacity-60">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-gray-200 space-y-2">
-          <button
-            onClick={() => navigate("/app")}
-            className="w-full text-sm px-3 py-2 text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors font-medium"
-          >
-            Floor iPad View
-          </button>
-          <div className="text-sm text-gray-600 mb-1 truncate">
-            {admin?.name ?? admin?.email}
-          </div>
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`w-full text-sm px-3 py-2 rounded-md transition-colors font-medium ${
-              activeTab === "settings"
-                ? "text-indigo-700 bg-indigo-50"
-                : "text-gray-600 bg-gray-100 hover:bg-gray-200"
-            }`}
-          >
-            Change Password
-          </button>
-          <button
-            onClick={logout}
-            className="w-full text-sm px-3 py-2 text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors font-medium"
-          >
-            Log Out
-          </button>
-        </div>
-      </aside>
+      <AdminSidebar active={activeTab} onSelectTab={setActiveTab} />
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
@@ -98,7 +38,7 @@ export default function Admin() {
             <h2 className="text-xl font-bold text-gray-900">
               {activeTab === "settings"
                 ? "Change Password"
-                : TABS.find((t) => t.id === activeTab)?.label}
+                : ADMIN_TABS.find((t) => t.id === activeTab)?.label}
             </h2>
           </div>
 
