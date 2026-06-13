@@ -268,7 +268,7 @@ export default function Receive() {
 
   if (successInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 flex">
+      <div className="h-screen bg-gray-50 flex">
         <AdminSidebar active="receiving" />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="bg-white rounded-xl shadow-lg p-10 text-center max-w-md w-full">
@@ -298,7 +298,7 @@ export default function Receive() {
   // ─── Main Render ───────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex">
       <AdminSidebar active="receiving" />
 
       <main className="flex-1 overflow-auto p-6">
