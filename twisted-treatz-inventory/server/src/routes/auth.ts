@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma.js";
 import { generateAdminToken, generateTeamMemberToken } from "../services/tokenService.js";
+import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
 
 const router = Router();
 
@@ -186,5 +187,107 @@ router.post("/team/verify", async (req: Request, res: Response) => {
     });
   }
 });
+
+// ─── POST /api/v1/auth/admin/change-password ────────────────────────
+// Admin changes their OWN password. Id comes from the token — there is no
+// :id param, so an admin can only ever change their own (no IDOR). Existing
+// tokens stay valid after a change (JWT_SECRET is unchanged); a change does
+// NOT revoke other sessions — documented gap, separate feature if needed.
+const MIN_PASSWORD_LENGTH = 10;
+
+router.post(
+  "/admin/change-password",
+  requireAdmin,
+  async (req: AdminRequest, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const adminId = req.admin!.adminId;
+
+      if (
+        !currentPassword ||
+        !newPassword ||
+        typeof currentPassword !== "string" ||
+        typeof newPassword !== "string"
+      ) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: "currentPassword and newPassword are required",
+        });
+        return;
+      }
+
+      if (newPassword.length < MIN_PASSWORD_LENGTH || newPassword.length > 72) {
+        // bcrypt silently truncates at 72 bytes — cap there to avoid surprises.
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: `New password must be ${MIN_PASSWORD_LENGTH}–72 characters`,
+        });
+        return;
+      }
+
+      if (newPassword === currentPassword) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: "New password must be different from the current password",
+        });
+        return;
+      }
+
+      // Rate limit wrong-current-password guesses per admin
+      if (!checkRateLimit(`pwchange:${adminId}`)) {
+        res.status(429).json({
+          success: false,
+          data: null,
+          error: "Too many attempts. Try again in 15 minutes.",
+        });
+        return;
+      }
+
+      const admin = await prisma.admin.findUnique({ where: { id: adminId } });
+      if (!admin) {
+        res.status(404).json({
+          success: false,
+          data: null,
+          error: "Admin not found",
+        });
+        return;
+      }
+
+      const valid = await bcrypt.compare(currentPassword, admin.passwordHash);
+      if (!valid) {
+        res.status(401).json({
+          success: false,
+          data: null,
+          error: "Current password is incorrect",
+        });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      await prisma.admin.update({
+        where: { id: adminId },
+        data: { passwordHash },
+      });
+
+      // Success clears the attempt counter
+      resetRateLimit(`pwchange:${adminId}`);
+
+      res.json({
+        success: true,
+        data: { message: "Password updated" },
+      });
+    } catch (err) {
+      console.error("Change password error:", err);
+      res.status(500).json({
+        success: false,
+        data: null,
+        error: "Internal server error",
+      });
+    }
+  },
+);
 
 export default router;

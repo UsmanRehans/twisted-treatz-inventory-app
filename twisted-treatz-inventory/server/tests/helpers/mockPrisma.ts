@@ -20,6 +20,7 @@ export function createMockPrisma() {
     },
     admin: {
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     removal: {
       create: vi.fn(),

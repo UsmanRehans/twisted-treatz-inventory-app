@@ -14,6 +14,7 @@ vi.mock("@sendgrid/mail", () => ({
 
 import app from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { generateAdminToken, generateTeamMemberToken } from "../src/services/tokenService.js";
 import type { MockPrisma } from "./helpers/mockPrisma.js";
 
 const mockPrisma = prisma as unknown as MockPrisma;
@@ -150,5 +151,97 @@ describe("POST /api/v1/auth/team/verify", () => {
       .post("/api/v1/auth/team/verify")
       .send({ memberId: "abc", pin: "1234" });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/auth/admin/change-password", () => {
+  const NEW_PASSWORD = "brand-new-password-2026";
+  const adminToken = generateAdminToken({ id: 1, email: "usman@twistedtreatz.com" });
+  const teamToken = generateTeamMemberToken({ id: 2, name: "Jess", initials: "JR" });
+
+  function change(body: Record<string, unknown>, token = adminToken) {
+    return request(app)
+      .post("/api/v1/auth/admin/change-password")
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+  }
+
+  beforeEach(() => {
+    mockPrisma.admin.findUnique.mockResolvedValue({
+      id: 1,
+      email: "usman@twistedtreatz.com",
+      passwordHash,
+      name: "Usman",
+      createdAt: new Date(),
+    });
+    mockPrisma.admin.update.mockResolvedValue({ id: 1 });
+  });
+
+  it("rejects unauthenticated requests with 401", async () => {
+    const res = await request(app)
+      .post("/api/v1/auth/admin/change-password")
+      .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects team member tokens with 403", async () => {
+    const res = await change({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD }, teamToken);
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects a wrong current password with 401 and writes nothing", async () => {
+    const res = await change({ currentPassword: "wrong-password", newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(401);
+    expect(mockPrisma.admin.update).not.toHaveBeenCalled();
+  });
+
+  it("changes the password with a correct current password", async () => {
+    const res = await change({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(200);
+
+    // The new hash actually verifies against the new password
+    const written = mockPrisma.admin.update.mock.calls[0][0].data.passwordHash;
+    expect(bcrypt.compareSync(NEW_PASSWORD, written)).toBe(true);
+    expect(bcrypt.compareSync(PASSWORD, written)).toBe(false);
+  });
+
+  it("rejects a new password shorter than 10 chars with 400", async () => {
+    const res = await change({ currentPassword: PASSWORD, newPassword: "short" });
+    expect(res.status).toBe(400);
+    expect(mockPrisma.admin.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new password equal to the current password with 400", async () => {
+    const res = await change({ currentPassword: PASSWORD, newPassword: PASSWORD });
+    expect(res.status).toBe(400);
+    expect(mockPrisma.admin.update).not.toHaveBeenCalled();
+  });
+
+  it("never returns a password hash in the response", async () => {
+    const res = await change({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(JSON.stringify(res.body).toLowerCase()).not.toContain("hash");
+    expect(JSON.stringify(res.body)).not.toContain(passwordHash);
+  });
+
+  it("rate limits after 5 wrong current-password attempts", async () => {
+    // Distinct admin id so this test's counter doesn't collide with others
+    const token = generateAdminToken({ id: 55, email: "rl@twistedtreatz.com" });
+    mockPrisma.admin.findUnique.mockResolvedValue({
+      id: 55,
+      email: "rl@twistedtreatz.com",
+      passwordHash,
+      name: "RL",
+      createdAt: new Date(),
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const res = await change({ currentPassword: "nope", newPassword: NEW_PASSWORD }, token);
+      expect(res.status).toBe(401);
+    }
+    const blocked = await change(
+      { currentPassword: PASSWORD, newPassword: NEW_PASSWORD },
+      token,
+    );
+    expect(blocked.status).toBe(429);
   });
 });
