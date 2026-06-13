@@ -3,10 +3,8 @@
 // One alert per product per day. Never throws — errors are logged only.
 
 import sgMail from "@sendgrid/mail";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { lowStockEmailHtml, lowStockEmailSubject } from "./emailTemplates.js";
-
-const prisma = new PrismaClient();
 
 // ─── SendGrid Configuration ─────────────────────────────────────────
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;

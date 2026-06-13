@@ -5,8 +5,11 @@ import StatCards from "../components/admin/StatCards";
 import ProductTable from "../components/admin/ProductTable";
 import TeamMemberCards from "../components/admin/TeamMemberCards";
 import ActivityLog from "../components/admin/ActivityLog";
+import ChangePassword from "../components/admin/ChangePassword";
 
-type Tab = "overview" | "products" | "team" | "activity" | "receiving";
+// "settings" is reachable from the account zone (sidebar footer), not the
+// primary nav — it's an account action, not an inventory view.
+type Tab = "overview" | "products" | "team" | "activity" | "receiving" | "settings";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "[=]" },
@@ -70,6 +73,16 @@ export default function Admin() {
             {admin?.name ?? admin?.email}
           </div>
           <button
+            onClick={() => setActiveTab("settings")}
+            className={`w-full text-sm px-3 py-2 rounded-md transition-colors font-medium ${
+              activeTab === "settings"
+                ? "text-indigo-700 bg-indigo-50"
+                : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+            }`}
+          >
+            Change Password
+          </button>
+          <button
             onClick={logout}
             className="w-full text-sm px-3 py-2 text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors font-medium"
           >
@@ -83,7 +96,9 @@ export default function Admin() {
         <div className="max-w-6xl mx-auto p-6">
           <div className="mb-6">
             <h2 className="text-xl font-bold text-gray-900">
-              {TABS.find((t) => t.id === activeTab)?.label}
+              {activeTab === "settings"
+                ? "Change Password"
+                : TABS.find((t) => t.id === activeTab)?.label}
             </h2>
           </div>
 
@@ -91,6 +106,7 @@ export default function Admin() {
           {activeTab === "products" && <ProductTable token={token} />}
           {activeTab === "team" && <TeamMemberCards token={token} />}
           {activeTab === "activity" && <ActivityLog token={token} />}
+          {activeTab === "settings" && <ChangePassword token={token} />}
         </div>
       </main>
     </div>

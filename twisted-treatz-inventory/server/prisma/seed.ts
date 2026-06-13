@@ -152,49 +152,66 @@ async function main() {
   }
 
   // ─── Seed Admin ─────────────────────────────────────────────────────
+  // Credentials come from env, never hardcoded. Existing admin is left
+  // untouched so re-running seed can never reset a live password.
   console.log("\n--- Seeding admin user ---");
-  const adminPasswordHash = await bcrypt.hash("TwistedAdmin2024!", 12);
-  await prisma.admin.upsert({
-    where: { email: "admin@twistedtreatz.com" },
-    update: { passwordHash: adminPasswordHash, name: "Admin" },
-    create: {
-      email: "admin@twistedtreatz.com",
-      passwordHash: adminPasswordHash,
-      name: "Admin",
-    },
-  });
-  console.log("Admin user seeded: admin@twistedtreatz.com");
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@twistedtreatz.com";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 
-  // ─── Seed Team Members ─────────────────────────────────────────────
-  console.log("\n--- Seeding team members ---");
-  const teamMembers = [
-    { name: "Maria R", initials: "MR", pin: "1234" },
-    { name: "James T", initials: "JT", pin: "2345" },
-    { name: "Sofia L", initials: "SL", pin: "3456" },
-    { name: "David K", initials: "DK", pin: "4567" },
-    { name: "Ashley M", initials: "AM", pin: "5678" },
-    { name: "Carlos P", initials: "CP", pin: "6789" },
-  ];
-
-  // Clear existing team members (and their removals first)
-  await prisma.removal.deleteMany();
-  await prisma.teamMember.deleteMany();
-
-  for (const member of teamMembers) {
-    const pinHash = await bcrypt.hash(member.pin, 12);
-    await prisma.teamMember.create({
+  const existingAdmin = await prisma.admin.findUnique({ where: { email: adminEmail } });
+  if (existingAdmin) {
+    console.log(`Admin ${adminEmail} already exists — left unchanged.`);
+  } else if (!adminPassword) {
+    console.warn(
+      "SEED_ADMIN_PASSWORD not set and no admin exists — skipping admin seed. " +
+        "Set SEED_ADMIN_PASSWORD to create the initial admin.",
+    );
+  } else {
+    await prisma.admin.create({
       data: {
-        name: member.name,
-        initials: member.initials,
-        pinHash,
-        active: true,
+        email: adminEmail,
+        passwordHash: await bcrypt.hash(adminPassword, 12),
+        name: process.env.SEED_ADMIN_NAME ?? "Admin",
       },
     });
-    console.log(`  ${member.name} (${member.initials}) — PIN: ${member.pin}`);
+    console.log(`Admin user created: ${adminEmail}`);
   }
 
-  const memberCount = await prisma.teamMember.count();
-  console.log(`\nSeeded ${memberCount} team members.`);
+  // ─── Seed Team Members ─────────────────────────────────────────────
+  // Names only — PINs are assigned by the admin via the dashboard after
+  // seeding, so no credential ever lives in source. Skips if members
+  // already exist, so the audit log (removals) is never wiped.
+  console.log("\n--- Seeding team members ---");
+  const existingMemberCount = await prisma.teamMember.count();
+  if (existingMemberCount > 0) {
+    console.log(`${existingMemberCount} team members already exist — skipping.`);
+  } else {
+    const teamMembers = [
+      { name: "Maria R", initials: "MR" },
+      { name: "James T", initials: "JT" },
+      { name: "Sofia L", initials: "SL" },
+      { name: "David K", initials: "DK" },
+      { name: "Ashley M", initials: "AM" },
+      { name: "Carlos P", initials: "CP" },
+    ];
+
+    // Random one-time PIN per member; printed once so the admin can
+    // distribute them, then changed by each member on first use.
+    for (const member of teamMembers) {
+      const pin = String(Math.floor(1000 + Math.random() * 9000));
+      await prisma.teamMember.create({
+        data: {
+          name: member.name,
+          initials: member.initials,
+          pinHash: await bcrypt.hash(pin, 12),
+          active: true,
+        },
+      });
+      console.log(`  ${member.name} (${member.initials}) — temporary PIN: ${pin}`);
+    }
+    console.log(`\nSeeded ${teamMembers.length} team members with random temporary PINs.`);
+    console.log("Distribute these PINs securely, then reset them from the admin dashboard.");
+  }
 }
 
 main()

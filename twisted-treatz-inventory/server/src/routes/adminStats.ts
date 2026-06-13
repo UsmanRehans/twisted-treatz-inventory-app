@@ -1,9 +1,8 @@
 import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ─── GET /api/v1/admin/stats ───────────────────────────────────────
 // Admin only — dashboard statistics

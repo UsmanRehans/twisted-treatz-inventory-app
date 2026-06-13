@@ -1,14 +1,15 @@
-import { Router, Request, Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Router, Response } from "express";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
+import { requireAnyAuth, AuthedRequest } from "../middleware/requireAnyAuth.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ─── GET /api/v1/products/categories ───────────────────────────────
-// Public — iPad needs this for category tabs
+// Any authenticated user — iPad fetches this after PIN verification.
 // Must be defined BEFORE /:id to avoid route conflict
-router.get("/categories", async (_req: Request, res: Response) => {
+router.get("/categories", requireAnyAuth, async (_req: AuthedRequest, res: Response) => {
   try {
     const results = await prisma.product.findMany({
       where: { active: true },
@@ -34,9 +35,9 @@ router.get("/categories", async (_req: Request, res: Response) => {
 });
 
 // ─── GET /api/v1/products ──────────────────────────────────────────
-// Public — iPad needs this to browse products
+// Any authenticated user — iPad fetches this after PIN verification.
 // Query params: ?category=Gummy&search=bear&sort=name&order=asc
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const { category, search, sort, order } = req.query;
 
@@ -95,8 +96,8 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // ─── GET /api/v1/products/:id ──────────────────────────────────────
-// Public — get single product by ID
-router.get("/:id", async (req: Request, res: Response) => {
+// Any authenticated user — get single product by ID
+router.get("/:id", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const id = Number(req.params.id);
 

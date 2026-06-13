@@ -64,11 +64,11 @@ async function apiFetch<T>(
   options?: RequestInit
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
     },
-    ...options,
   });
 
   const json: ApiResponse<T> = await res.json();
@@ -95,6 +95,7 @@ export async function verifyPin(
 }
 
 export async function fetchProducts(
+  token: string,
   category?: string,
   search?: string
 ): Promise<Product[]> {
@@ -106,11 +107,15 @@ export async function fetchProducts(
     params.set("search", search);
   }
   const qs = params.toString();
-  return apiFetch<Product[]>(`/api/v1/products${qs ? `?${qs}` : ""}`);
+  return apiFetch<Product[]>(`/api/v1/products${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
-export async function fetchCategories(): Promise<string[]> {
-  return apiFetch<string[]>("/api/v1/products/categories");
+export async function fetchCategories(token: string): Promise<string[]> {
+  return apiFetch<string[]>("/api/v1/products/categories", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 export async function createRemoval(

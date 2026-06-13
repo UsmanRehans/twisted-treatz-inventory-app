@@ -1,18 +1,29 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { prisma } from "../lib/prisma.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
+import { verifyToken } from "../services/tokenService.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ─── GET /api/v1/team-members ───────────────────────────────────────
 // Public endpoint — iPad needs this to show member selection screen
-// Never returns pinHash
-// If ?all=true and admin auth is present, returns all members (including inactive)
+// (before any auth exists). Never returns pinHash.
+// ?all=true (include inactive members) is honored ONLY with a valid
+// admin token — unauthenticated callers always get active members only.
+function hasValidAdminToken(req: Request): boolean {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
+  try {
+    return verifyToken(authHeader.slice(7)).type === "admin";
+  } catch {
+    return false;
+  }
+}
+
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const showAll = req.query.all === "true";
+    const showAll = req.query.all === "true" && hasValidAdminToken(req);
 
     const members = await prisma.teamMember.findMany({
       where: showAll ? {} : { active: true },

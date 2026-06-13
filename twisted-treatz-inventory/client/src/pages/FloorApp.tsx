@@ -132,8 +132,8 @@ export default function FloorApp() {
       resetIdle();
 
       const [prods, cats] = await Promise.all([
-        fetchProducts(),
-        fetchCategories(),
+        fetchProducts(result.token),
+        fetchCategories(result.token),
       ]);
       setProducts(prods);
       setCategories(cats);
