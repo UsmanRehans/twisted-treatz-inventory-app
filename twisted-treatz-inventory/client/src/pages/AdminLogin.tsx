@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { adminLogin } from "../api/adminClient";
 import { useAdminAuth } from "../hooks/useAdminAuth";
 
@@ -73,6 +73,14 @@ export default function AdminLogin() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Enter password"
               />
+              <div className="text-right mt-1">
+                <Link
+                  to="/admin/forgot-password"
+                  className="text-sm text-indigo-600 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             {error && (
