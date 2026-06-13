@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAdminAuth } from "../hooks/useAdminAuth";
+import AdminSidebar from "../components/admin/AdminSidebar";
 import {
   fetchAdminProducts,
   createReceipt,
@@ -37,8 +38,7 @@ function formatChicago(iso: string): string {
 // ─── Component ──────────────────────────────────────────────────────
 
 export default function Receive() {
-  const { token, admin, isAuthenticated, logout } = useAdminAuth();
-  const navigate = useNavigate();
+  const { token, isAuthenticated } = useAdminAuth();
 
   // Products list
   const [products, setProducts] = useState<AdminProduct[]>([]);
@@ -268,8 +268,8 @@ export default function Receive() {
 
   if (successInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Header admin={admin} logout={logout} navigate={navigate} />
+      <div className="min-h-screen bg-gray-50 flex">
+        <AdminSidebar active="receiving" />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="bg-white rounded-xl shadow-lg p-10 text-center max-w-md w-full">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -298,10 +298,13 @@ export default function Receive() {
   // ─── Main Render ───────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header admin={admin} logout={logout} navigate={navigate} />
+    <div className="min-h-screen bg-gray-50 flex">
+      <AdminSidebar active="receiving" />
 
-      <div className="flex-1 p-6">
+      <main className="flex-1 overflow-auto p-6">
+        <div className="max-w-7xl mx-auto mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Receiving</h2>
+        </div>
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6">
           {/* Left: Receipt Form */}
           <div className="flex-1 min-w-0">
@@ -682,47 +685,12 @@ export default function Receive() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────
-
-function Header({
-  admin,
-  logout,
-  navigate,
-}: {
-  admin: { name: string; email: string } | null;
-  logout: () => void;
-  navigate: (path: string) => void;
-}) {
-  return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-bold text-gray-900">
-          Twisted Treatz &mdash; Receiving
-        </h1>
-        <button
-          onClick={() => navigate("/admin")}
-          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
-        >
-          &larr; Back to Dashboard
-        </button>
-      </div>
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-500">{admin?.name ?? admin?.email}</span>
-        <button
-          onClick={logout}
-          className="text-sm px-3 py-1.5 text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors font-medium"
-        >
-          Log Out
-        </button>
-      </div>
-    </header>
-  );
-}
 
 function SelectedProductBadge({ product }: { product: AdminProduct }) {
   return (
