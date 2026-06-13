@@ -132,6 +132,21 @@ export async function adminLogin(
   });
 }
 
+export async function changeAdminPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return adminFetch<{ message: string }>(
+    "/api/v1/auth/admin/change-password",
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }
+  );
+}
+
 // ─── Stats ─────────────────────────────────────────────────────────
 
 export async function fetchAdminStats(token: string): Promise<AdminStats> {
