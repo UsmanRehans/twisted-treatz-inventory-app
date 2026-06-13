@@ -38,12 +38,16 @@ model TeamMember {
 }
 
 model Admin {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime  @default(now())
-  receipts     Receipt[]
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  passwordHash      String
+  name              String
+  createdAt         DateTime  @default(now())
+  // Forgot-password flow: SHA-256 hash of the emailed reset token (raw token
+  // is never stored), nulled on use. Expiry enforced in the lookup query.
+  resetTokenHash    String?   @unique
+  resetTokenExpires DateTime?
+  receipts          Receipt[]
 }
 
 model Removal {

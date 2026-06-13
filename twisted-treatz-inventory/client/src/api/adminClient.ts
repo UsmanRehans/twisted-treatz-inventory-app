@@ -147,6 +147,33 @@ export async function changeAdminPassword(
   );
 }
 
+export async function requestPasswordReset(
+  email: string
+): Promise<{ message: string }> {
+  return adminFetch<{ message: string }>(
+    "/api/v1/auth/admin/request-reset",
+    undefined,
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }
+  );
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return adminFetch<{ message: string }>(
+    "/api/v1/auth/admin/reset-password",
+    undefined,
+    {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
+    }
+  );
+}
+
 // ─── Stats ─────────────────────────────────────────────────────────
 
 export async function fetchAdminStats(token: string): Promise<AdminStats> {

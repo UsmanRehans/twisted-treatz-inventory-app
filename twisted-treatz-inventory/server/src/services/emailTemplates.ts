@@ -29,6 +29,57 @@ function formatDate(date: Date): string {
   });
 }
 
+export function passwordResetEmailSubject(): string {
+  return "Reset your password | Twisted Treatz Admin";
+}
+
+export function passwordResetEmailHtml(resetLink: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 24px;">
+
+    <!-- Header -->
+    <div style="background-color: #7c3aed; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 20px;">Twisted Treatz Inventory</h1>
+      <p style="color: #ddd6fe; margin: 4px 0 0 0; font-size: 14px;">Password Reset</p>
+    </div>
+
+    <!-- Main Content -->
+    <div style="background-color: #ffffff; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
+      <p style="color: #1f2937; font-size: 14px; margin: 0 0 16px 0;">
+        A password reset was requested for your Twisted Treatz admin account.
+        Click the button below to choose a new password.
+      </p>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${resetLink}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-size: 14px; font-weight: 600;">
+          Reset Password
+        </a>
+      </div>
+
+      <p style="color: #6b7280; font-size: 13px; margin: 16px 0 0 0;">
+        This link expires in 30 minutes and can only be used once.
+        If you didn't request this, you can safely ignore this email — your password will not change.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; padding: 16px; color: #9ca3af; font-size: 12px;">
+      <p style="margin: 0;">Twisted Treatz Inventory System</p>
+      <p style="margin: 4px 0 0 0;">This is an automated email. Do not reply.</p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+}
+
 export function lowStockEmailSubject(productName: string): string {
   return `\u26A0\uFE0F Low Stock Alert \u2014 ${productName} | Twisted Treatz`;
 }

@@ -1,8 +1,10 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { generateAdminToken, generateTeamMemberToken } from "../services/tokenService.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
+import { sendPasswordResetEmail } from "../services/passwordResetService.js";
 
 const router = Router();
 
@@ -14,7 +16,7 @@ const loginAttempts = new Map<string, { count: number; windowStart: number }>();
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
-function checkRateLimit(key: string): boolean {
+function checkRateLimit(key: string, maxAttempts: number = MAX_ATTEMPTS): boolean {
   const now = Date.now();
   const record = loginAttempts.get(key);
 
@@ -24,7 +26,7 @@ function checkRateLimit(key: string): boolean {
     return true;
   }
 
-  if (record.count >= MAX_ATTEMPTS) {
+  if (record.count >= maxAttempts) {
     return false; // blocked
   }
 
@@ -289,5 +291,169 @@ router.post(
     }
   },
 );
+
+// ─── POST /api/v1/auth/admin/request-reset ──────────────────────────
+// Forgot-password step 1. Always returns the same 200 whether or not the
+// email exists (anti-enumeration) — failures are logged server-side only.
+// Stores only the SHA-256 hash of the token; the raw token goes in the
+// emailed link. Newest request wins: any prior token is overwritten.
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const RESET_REQUEST_MAX_ATTEMPTS = 3; // it sends email — keep it tight
+
+router.post("/admin/request-reset", async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== "string") {
+      res.status(400).json({
+        success: false,
+        data: null,
+        error: "Email is required",
+      });
+      return;
+    }
+
+    const emailKey = `reset-req:${email.toLowerCase()}`;
+    const ipKey = `reset-req-ip:${req.ip}`;
+    if (
+      !checkRateLimit(emailKey, RESET_REQUEST_MAX_ATTEMPTS) ||
+      !checkRateLimit(ipKey)
+    ) {
+      res.status(429).json({
+        success: false,
+        data: null,
+        error: "Too many reset requests. Try again in 15 minutes.",
+      });
+      return;
+    }
+
+    const admin = await prisma.admin.findUnique({ where: { email } });
+
+    if (admin) {
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const resetTokenHash = crypto
+        .createHash("sha256")
+        .update(rawToken)
+        .digest("hex");
+
+      await prisma.admin.update({
+        where: { id: admin.id },
+        data: {
+          resetTokenHash,
+          resetTokenExpires: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        },
+      });
+
+      // Fire-and-forget (never throws): awaiting the SendGrid call would make
+      // known-email requests measurably slower than unknown ones — a timing
+      // oracle for account enumeration.
+      void sendPasswordResetEmail(admin.email, rawToken);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        message: "If that email has an account, a reset link has been sent.",
+      },
+    });
+  } catch (err) {
+    console.error("Request reset error:", err);
+    res.status(500).json({
+      success: false,
+      data: null,
+      error: "Internal server error",
+    });
+  }
+});
+
+// ─── POST /api/v1/auth/admin/reset-password ─────────────────────────
+// Forgot-password step 2. Single-use: the token hash is nulled in the same
+// update that writes the new password hash. Expired/used/unknown tokens all
+// get the same generic 400. Like change-password, existing JWT sessions
+// stay valid after a reset — documented gap, separate feature if needed.
+router.post("/admin/reset-password", async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (
+      !token ||
+      !newPassword ||
+      typeof token !== "string" ||
+      typeof newPassword !== "string"
+    ) {
+      res.status(400).json({
+        success: false,
+        data: null,
+        error: "token and newPassword are required",
+      });
+      return;
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH || newPassword.length > 72) {
+      // bcrypt silently truncates at 72 bytes — cap there to avoid surprises.
+      res.status(400).json({
+        success: false,
+        data: null,
+        error: `New password must be ${MIN_PASSWORD_LENGTH}–72 characters`,
+      });
+      return;
+    }
+
+    const ipKey = `reset-confirm-ip:${req.ip}`;
+    if (!checkRateLimit(ipKey)) {
+      res.status(429).json({
+        success: false,
+        data: null,
+        error: "Too many attempts. Try again in 15 minutes.",
+      });
+      return;
+    }
+
+    const resetTokenHash = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const admin = await prisma.admin.findFirst({
+      where: {
+        resetTokenHash,
+        resetTokenExpires: { gt: new Date() },
+      },
+    });
+
+    if (!admin) {
+      res.status(400).json({
+        success: false,
+        data: null,
+        error: "Invalid or expired reset link",
+      });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.admin.update({
+      where: { id: admin.id },
+      data: {
+        passwordHash,
+        resetTokenHash: null,
+        resetTokenExpires: null,
+      },
+    });
+
+    resetRateLimit(ipKey);
+
+    res.json({
+      success: true,
+      data: { message: "Password updated" },
+    });
+  } catch (err) {
+    console.error("Reset password error:", err);
+    res.status(500).json({
+      success: false,
+      data: null,
+      error: "Internal server error",
+    });
+  }
+});
 
 export default router;
