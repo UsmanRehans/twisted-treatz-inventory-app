@@ -47,13 +47,13 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col min-h-screen">
+    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col h-full">
       <div className="p-5 border-b border-gray-200">
         <h1 className="text-lg font-bold text-gray-900">Twisted Treatz</h1>
         <p className="text-xs text-gray-500 mt-0.5">Admin Dashboard</p>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {ADMIN_TABS.map((tab) => (
           <button
             key={tab.id}
