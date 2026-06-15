@@ -25,6 +25,7 @@ model Product {
   updatedAt      DateTime  @updatedAt
   removals       Removal[]
   receipts       Receipt[]
+  adjustments    Adjustment[]
 }
 
 model TeamMember {
@@ -47,7 +48,12 @@ model Admin {
   // is never stored), nulled on use. Expiry enforced in the lookup query.
   resetTokenHash    String?   @unique
   resetTokenExpires DateTime?
+  // Session revocation: embedded in admin JWTs and checked on every
+  // admin-authed request. Bumped on password change/reset to evict all
+  // outstanding tokens. Tokens minted before this field existed count as 0.
+  tokenVersion      Int       @default(0)
   receipts          Receipt[]
+  adjustments       Adjustment[]
 }
 
 model Removal {
@@ -74,6 +80,25 @@ model Receipt {
   unitPrice   Decimal? @db.Decimal(10, 2)
   notes       String?
   createdAt   DateTime @default(now())
+}
+
+// Admin stock correction (cycle count / bulk CSV import). Third movement
+// type alongside Removal (floor takes) and Receipt (shipment adds).
+model Adjustment {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  adminId   Int
+  admin     Admin    @relation(fields: [adminId], references: [id])
+  delta     Int // signed: +12 added, -5 removed
+  qtyBefore Int // live qty at apply time — preserves overwritten floor activity
+  qtyAfter  Int
+  reason    String? // CSV "note" column
+  batchId   String // uuid grouping all rows of one CSV import
+  createdAt DateTime @default(now())
+
+  @@index([batchId])
+  @@index([createdAt])
 }
 
 model AlertLog {

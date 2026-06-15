@@ -19,6 +19,10 @@ export interface AdminPayload {
   type: "admin";
   adminId: number;
   email: string;
+  // Matched against Admin.tokenVersion on every admin-authed request so a
+  // password change/reset evicts outstanding tokens. Optional because tokens
+  // minted before this claim existed are still valid — they count as 0.
+  tokenVersion?: number;
 }
 
 export interface TeamMemberPayload {
@@ -30,11 +34,16 @@ export interface TeamMemberPayload {
 
 export type TokenPayload = AdminPayload | TeamMemberPayload;
 
-export function generateAdminToken(admin: { id: number; email: string }): string {
+export function generateAdminToken(admin: {
+  id: number;
+  email: string;
+  tokenVersion: number;
+}): string {
   const payload: AdminPayload = {
     type: "admin",
     adminId: admin.id,
     email: admin.email,
+    tokenVersion: admin.tokenVersion,
   };
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
 }

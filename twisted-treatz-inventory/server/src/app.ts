@@ -6,6 +6,7 @@ import productsRoutes from "./routes/products.js";
 import adminStatsRoutes from "./routes/adminStats.js";
 import removalsRoutes from "./routes/removals.js";
 import receiptsRoutes from "./routes/receipts.js";
+import adjustmentsRoutes from "./routes/adjustments.js";
 
 // App construction lives here (separate from index.ts which calls listen)
 // so tests can import the app and drive it with supertest.
@@ -27,6 +28,7 @@ app.use("/api/v1/products", productsRoutes);
 app.use("/api/v1/admin", adminStatsRoutes);
 app.use("/api/v1/removals", removalsRoutes);
 app.use("/api/v1/receipts", receiptsRoutes);
+app.use("/api/v1/adjustments", adjustmentsRoutes);
 
 // ─── Health check ───────────────────────────────────────────────────
 app.get("/api/v1/health", (_req, res) => {

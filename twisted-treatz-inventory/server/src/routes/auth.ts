@@ -12,12 +12,27 @@ const router = Router();
 // In-memory tracker keyed by attempt identity:
 //   team PIN:    "pin:<memberId>"
 //   admin login: "admin:<email>" and "admin-ip:<ip>"
-const loginAttempts = new Map<string, { count: number; windowStart: number }>();
+// Exported for tests only — nothing else should touch this directly.
+export const loginAttempts = new Map<string, { count: number; windowStart: number }>();
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
+// Keys are attacker-controlled (any email burns a slot), so without
+// reaping, the map grows forever. Expired windows are swept lazily from
+// checkRateLimit, at most once per WINDOW_MS — no timer to leak.
+let nextSweepAt = Date.now() + WINDOW_MS;
+
+function sweepExpiredAttempts(now: number): void {
+  if (now < nextSweepAt) return;
+  nextSweepAt = now + WINDOW_MS;
+  for (const [key, record] of loginAttempts) {
+    if (now - record.windowStart > WINDOW_MS) loginAttempts.delete(key);
+  }
+}
+
 function checkRateLimit(key: string, maxAttempts: number = MAX_ATTEMPTS): boolean {
   const now = Date.now();
+  sweepExpiredAttempts(now);
   const record = loginAttempts.get(key);
 
   if (!record || now - record.windowStart > WINDOW_MS) {
@@ -89,7 +104,11 @@ router.post("/admin/login", async (req: Request, res: Response) => {
     // Successful — clear failure counters
     resetRateLimit(emailKey, ipKey);
 
-    const token = generateAdminToken({ id: admin.id, email: admin.email });
+    const token = generateAdminToken({
+      id: admin.id,
+      email: admin.email,
+      tokenVersion: admin.tokenVersion,
+    });
 
     res.json({
       success: true,
@@ -192,9 +211,9 @@ router.post("/team/verify", async (req: Request, res: Response) => {
 
 // ─── POST /api/v1/auth/admin/change-password ────────────────────────
 // Admin changes their OWN password. Id comes from the token — there is no
-// :id param, so an admin can only ever change their own (no IDOR). Existing
-// tokens stay valid after a change (JWT_SECRET is unchanged); a change does
-// NOT revoke other sessions — documented gap, separate feature if needed.
+// :id param, so an admin can only ever change their own (no IDOR). The
+// tokenVersion bump revokes every outstanding session; the response carries
+// a fresh token so the device making the change stays signed in.
 const MIN_PASSWORD_LENGTH = 10;
 
 router.post(
@@ -269,17 +288,26 @@ router.post(
       }
 
       const passwordHash = await bcrypt.hash(newPassword, 12);
-      await prisma.admin.update({
+      const updated = await prisma.admin.update({
         where: { id: adminId },
-        data: { passwordHash },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+        select: { tokenVersion: true },
       });
 
       // Success clears the attempt counter
       resetRateLimit(`pwchange:${adminId}`);
 
+      // Every pre-bump token (including the one on this request) is now
+      // dead — mint a current-version one for this session.
+      const token = generateAdminToken({
+        id: adminId,
+        email: admin.email,
+        tokenVersion: updated.tokenVersion,
+      });
+
       res.json({
         success: true,
-        data: { message: "Password updated" },
+        data: { message: "Password updated", token },
       });
     } catch (err) {
       console.error("Change password error:", err);
@@ -367,10 +395,11 @@ router.post("/admin/request-reset", async (req: Request, res: Response) => {
 });
 
 // ─── POST /api/v1/auth/admin/reset-password ─────────────────────────
-// Forgot-password step 2. Single-use: the token hash is nulled in the same
-// update that writes the new password hash. Expired/used/unknown tokens all
-// get the same generic 400. Like change-password, existing JWT sessions
-// stay valid after a reset — documented gap, separate feature if needed.
+// Forgot-password step 2. Single-use: matching the unexpired token hash and
+// consuming it happen in ONE updateMany, so two concurrent requests with the
+// same token can't both succeed (no find-then-update TOCTOU window). The
+// tokenVersion bump revokes all outstanding JWT sessions. Expired/used/
+// unknown tokens all get the same generic 400.
 router.post("/admin/reset-password", async (req: Request, res: Response) => {
   try {
     const { token, newPassword } = req.body;
@@ -414,14 +443,24 @@ router.post("/admin/reset-password", async (req: Request, res: Response) => {
       .update(token)
       .digest("hex");
 
-    const admin = await prisma.admin.findFirst({
+    // Hash first: updateMany needs the new hash in the same atomic statement
+    // that validates and consumes the token.
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    const consumed = await prisma.admin.updateMany({
       where: {
         resetTokenHash,
         resetTokenExpires: { gt: new Date() },
       },
+      data: {
+        passwordHash,
+        resetTokenHash: null,
+        resetTokenExpires: null,
+        tokenVersion: { increment: 1 },
+      },
     });
 
-    if (!admin) {
+    if (consumed.count === 0) {
       res.status(400).json({
         success: false,
         data: null,
@@ -429,16 +468,6 @@ router.post("/admin/reset-password", async (req: Request, res: Response) => {
       });
       return;
     }
-
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-    await prisma.admin.update({
-      where: { id: admin.id },
-      data: {
-        passwordHash,
-        resetTokenHash: null,
-        resetTokenExpires: null,
-      },
-    });
 
     resetRateLimit(ipKey);
 

@@ -18,7 +18,11 @@ import type { MockPrisma } from "./helpers/mockPrisma.js";
 
 const mockPrisma = prisma as unknown as MockPrisma;
 
-const adminToken = generateAdminToken({ id: 1, email: "usman@twistedtreatz.com" });
+const adminToken = generateAdminToken({
+  id: 1,
+  email: "usman@twistedtreatz.com",
+  tokenVersion: 0,
+});
 const teamToken = generateTeamMemberToken({ id: 2, name: "Jess", initials: "JR" });
 
 function auth(token: string) {
@@ -28,6 +32,8 @@ function auth(token: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   // Generic happy-path data so authorized requests don't 500
+  // (admin lookup backs the middleware's tokenVersion check)
+  mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
   mockPrisma.product.findMany.mockResolvedValue([]);
   mockPrisma.removal.findMany.mockResolvedValue([]);
   mockPrisma.removal.count.mockResolvedValue(0);

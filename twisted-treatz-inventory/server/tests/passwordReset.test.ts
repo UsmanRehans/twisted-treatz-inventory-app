@@ -47,6 +47,7 @@ const adminRecord = {
   createdAt: new Date(),
   resetTokenHash: null,
   resetTokenExpires: null,
+  tokenVersion: 0,
 };
 
 function sha256(value: string): string {
@@ -150,34 +151,32 @@ describe("POST /api/v1/auth/admin/request-reset", () => {
 
 describe("POST /api/v1/auth/admin/reset-password", () => {
   const RAW_TOKEN = crypto.randomBytes(32).toString("hex");
-  const adminWithToken = {
-    ...adminRecord,
-    resetTokenHash: sha256(RAW_TOKEN),
-    resetTokenExpires: new Date(Date.now() + 30 * 60 * 1000),
-  };
+
+  // Validate-and-consume is a single updateMany: count 0 means the token
+  // was unknown, expired, or already used — there is no separate lookup a
+  // concurrent request could race against.
 
   it("rejects an unknown token with a generic 400", async () => {
-    mockPrisma.admin.findFirst.mockResolvedValue(null);
+    mockPrisma.admin.updateMany.mockResolvedValue({ count: 0 });
     const res = await request(app)
       .post("/api/v1/auth/admin/reset-password")
       .send({ token: "deadbeef".repeat(8), newPassword: NEW_PASSWORD });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid or expired reset link");
-    expect(mockPrisma.admin.update).not.toHaveBeenCalled();
   });
 
   it("rejects an expired token with the same generic 400", async () => {
-    // The route queries with resetTokenExpires > now, so an expired token
-    // simply doesn't match — Prisma returns null
-    mockPrisma.admin.findFirst.mockResolvedValue(null);
+    // The update matches on resetTokenExpires > now, so an expired token
+    // simply doesn't match — count comes back 0
+    mockPrisma.admin.updateMany.mockResolvedValue({ count: 0 });
     const res = await request(app)
       .post("/api/v1/auth/admin/reset-password")
       .send({ token: RAW_TOKEN, newPassword: NEW_PASSWORD });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid or expired reset link");
 
-    // And the lookup itself enforced the expiry window
-    const where = mockPrisma.admin.findFirst.mock.calls[0][0].where;
+    // And the statement itself enforced the expiry window
+    const where = mockPrisma.admin.updateMany.mock.calls[0][0].where;
     expect(where.resetTokenExpires.gt).toBeInstanceOf(Date);
   });
 
@@ -186,42 +185,48 @@ describe("POST /api/v1/auth/admin/reset-password", () => {
       .post("/api/v1/auth/admin/reset-password")
       .send({ token: RAW_TOKEN, newPassword: "short" });
     expect(res.status).toBe(400);
-    expect(mockPrisma.admin.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.admin.updateMany).not.toHaveBeenCalled();
   });
 
-  it("looks up by token HASH, never by the raw token", async () => {
-    mockPrisma.admin.findFirst.mockResolvedValue(adminWithToken);
-    mockPrisma.admin.update.mockResolvedValue(adminWithToken);
+  it("matches by token HASH, never by the raw token", async () => {
+    mockPrisma.admin.updateMany.mockResolvedValue({ count: 1 });
 
     await request(app)
       .post("/api/v1/auth/admin/reset-password")
       .send({ token: RAW_TOKEN, newPassword: NEW_PASSWORD });
 
-    const where = mockPrisma.admin.findFirst.mock.calls[0][0].where;
+    const where = mockPrisma.admin.updateMany.mock.calls[0][0].where;
     expect(where.resetTokenHash).toBe(sha256(RAW_TOKEN));
     expect(where.resetTokenHash).not.toBe(RAW_TOKEN);
   });
 
-  it("sets the new password and nulls the token in one update (single-use)", async () => {
-    mockPrisma.admin.findFirst.mockResolvedValue(adminWithToken);
-    mockPrisma.admin.update.mockResolvedValue(adminWithToken);
+  it("consumes the token, sets the password, and revokes sessions in ONE atomic update", async () => {
+    mockPrisma.admin.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await request(app)
       .post("/api/v1/auth/admin/reset-password")
       .send({ token: RAW_TOKEN, newPassword: NEW_PASSWORD });
     expect(res.status).toBe(200);
 
-    const written = mockPrisma.admin.update.mock.calls[0][0].data;
+    // The same statement that validated the token wrote everything:
+    // no findFirst-then-update window for a concurrent request to exploit
+    expect(mockPrisma.admin.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.admin.update).not.toHaveBeenCalled();
+    expect(mockPrisma.admin.updateMany).toHaveBeenCalledTimes(1);
+
+    const written = mockPrisma.admin.updateMany.mock.calls[0][0].data;
     expect(bcrypt.compareSync(NEW_PASSWORD, written.passwordHash)).toBe(true);
     expect(bcrypt.compareSync(OLD_PASSWORD, written.passwordHash)).toBe(false);
     expect(written.resetTokenHash).toBeNull();
     expect(written.resetTokenExpires).toBeNull();
+    // Outstanding admin JWTs are evicted by the version bump
+    expect(written.tokenVersion).toEqual({ increment: 1 });
 
     expect(JSON.stringify(res.body).toLowerCase()).not.toContain("hash");
   });
 
   it("rate limits repeated bad-token attempts by IP", async () => {
-    mockPrisma.admin.findFirst.mockResolvedValue(null);
+    mockPrisma.admin.updateMany.mockResolvedValue({ count: 0 });
 
     let blocked = false;
     for (let i = 0; i < 6; i++) {

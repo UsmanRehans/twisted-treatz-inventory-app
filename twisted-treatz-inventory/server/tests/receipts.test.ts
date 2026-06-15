@@ -17,7 +17,11 @@ import { generateAdminToken } from "../src/services/tokenService.js";
 import type { MockPrisma } from "./helpers/mockPrisma.js";
 
 const mockPrisma = prisma as unknown as MockPrisma;
-const adminToken = generateAdminToken({ id: 1, email: "usman@twistedtreatz.com" });
+const adminToken = generateAdminToken({
+  id: 1,
+  email: "usman@twistedtreatz.com",
+  tokenVersion: 0,
+});
 
 const sourPatch = {
   id: 7,
@@ -28,6 +32,8 @@ const sourPatch = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Backs the middleware's tokenVersion check
+  mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
   mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findUnique.mockResolvedValue(sourPatch);
   mockPrisma.product.update.mockResolvedValue({ ...sourPatch, currentQty: 16 });
