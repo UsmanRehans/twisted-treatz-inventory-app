@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  fetchRemovals,
+  fetchActivity,
   fetchAdminTeamMembers,
   fetchAdminCategories,
 } from "../../api/adminClient";
 import type {
-  RemovalRecord,
+  ActivityEvent,
+  ActivityType,
   AdminTeamMember,
-  RemovalFilters,
 } from "../../api/adminClient";
 
 interface ActivityLogProps {
@@ -26,13 +26,34 @@ function formatTimestamp(dateStr: string): string {
   });
 }
 
+const TYPE_LABEL: Record<ActivityType, string> = {
+  removal: "Removal",
+  receipt: "Receipt",
+  adjustment: "Adjustment",
+};
+
+const TYPE_STYLE: Record<ActivityType, string> = {
+  removal: "bg-red-50 text-red-700",
+  receipt: "bg-green-50 text-green-700",
+  adjustment: "bg-indigo-50 text-indigo-700",
+};
+
+// Quote every cell and neutralize Excel formula triggers (= + - @) so the
+// export can't break columns or execute on open.
+function escapeCsvCell(value: string): string {
+  let cell = value ?? "";
+  if (/^[=+\-@\t\r]/.test(cell)) cell = `'${cell}`;
+  return `"${cell.replace(/"/g, '""')}"`;
+}
+
 export default function ActivityLog({ token }: ActivityLogProps) {
-  const [removals, setRemovals] = useState<RemovalRecord[]>([]);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   // Filters
+  const [type, setType] = useState<ActivityType | "all">("all");
   const [memberId, setMemberId] = useState<number | undefined>(undefined);
   const [category, setCategory] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -49,59 +70,64 @@ export default function ActivityLog({ token }: ActivityLogProps) {
     fetchAdminCategories(token).then(setCategories).catch(console.error);
   }, [token]);
 
-  const loadRemovals = useCallback(() => {
+  const loadActivity = useCallback(() => {
     setLoading(true);
-    const filters: RemovalFilters = {
+    fetchActivity(token, {
+      type,
+      memberId,
+      category: category || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
       page,
       limit,
-      sort: "createdAt",
-      order: "desc",
-    };
-    if (memberId) filters.memberId = memberId;
-    if (category) filters.category = category;
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
-
-    fetchRemovals(token, filters)
+    })
       .then((data) => {
-        setRemovals(data.removals);
+        setEvents(data.events);
         setTotal(data.total);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [token, page, memberId, category, startDate, endDate]);
+  }, [token, type, page, memberId, category, startDate, endDate]);
 
   useEffect(() => {
-    loadRemovals();
-  }, [loadRemovals]);
+    loadActivity();
+  }, [loadActivity]);
 
   // Reset to page 1 on filter change
   useEffect(() => {
     setPage(1);
-  }, [memberId, category, startDate, endDate]);
+  }, [type, memberId, category, startDate, endDate]);
 
   const totalPages = Math.ceil(total / limit);
 
   function exportCSV() {
     const headers = [
       "Timestamp",
-      "Member",
+      "Type",
+      "Person",
       "Product",
       "Category",
-      "Qty Removed",
+      "Change",
       "Stock After",
+      "Note",
     ];
-    const rows = removals.map((r) => [
-      formatTimestamp(r.createdAt),
-      r.memberName,
-      r.productName,
-      r.productCategory,
-      String(r.qty),
-      String(r.qtyAfter),
+    const rows = events.map((e) => [
+      formatTimestamp(e.createdAt),
+      TYPE_LABEL[e.type],
+      e.actorName,
+      e.productName,
+      e.productCategory,
+      e.delta > 0 ? `+${e.delta}` : String(e.delta),
+      e.qtyAfter != null ? String(e.qtyAfter) : "",
+      e.note ?? "",
     ]);
 
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const csv =
+      "﻿" +
+      [headers, ...rows]
+        .map((row) => row.map(escapeCsvCell).join(","))
+        .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -114,6 +140,19 @@ export default function ActivityLog({ token }: ActivityLogProps) {
     <div>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4 items-end">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Type</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as ActivityType | "all")}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+          >
+            <option value="all">All Activity</option>
+            <option value="removal">Removals</option>
+            <option value="receipt">Receipts</option>
+            <option value="adjustment">Adjustments</option>
+          </select>
+        </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Member</label>
           <select
@@ -166,7 +205,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
         </div>
         <button
           onClick={exportCSV}
-          disabled={removals.length === 0}
+          disabled={events.length === 0}
           className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Export CSV
@@ -176,9 +215,9 @@ export default function ActivityLog({ token }: ActivityLogProps) {
       {/* Table */}
       {loading ? (
         <div className="text-center text-gray-500 py-8">Loading activity...</div>
-      ) : removals.length === 0 ? (
+      ) : events.length === 0 ? (
         <div className="text-center text-gray-400 py-12">
-          No removal records found.
+          No activity records found.
         </div>
       ) : (
         <>
@@ -190,7 +229,10 @@ export default function ActivityLog({ token }: ActivityLogProps) {
                     Time
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">
-                    Member
+                    Type
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    Person
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">
                     Product
@@ -199,7 +241,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
                     Category
                   </th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">
-                    Qty Removed
+                    Change
                   </th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">
                     Stock After
@@ -207,28 +249,39 @@ export default function ActivityLog({ token }: ActivityLogProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {removals.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
+                {events.map((e) => (
+                  <tr key={e.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
-                      {formatTimestamp(r.createdAt)}
+                      {formatTimestamp(e.createdAt)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_STYLE[e.type]}`}
+                      >
+                        {TYPE_LABEL[e.type]}
+                      </span>
                     </td>
                     <td className="px-4 py-2.5 text-gray-900 font-medium">
-                      {r.memberName}
+                      {e.actorName}
                     </td>
                     <td className="px-4 py-2.5 text-gray-900">
-                      {r.productName}
+                      {e.productName}
+                      {e.note && (
+                        <span className="block text-xs text-gray-400">{e.note}</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
-                      {r.productCategory}
+                      {e.productCategory}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-red-600 font-mono font-medium">
-                      -{r.qty}
+                    <td
+                      className={`px-4 py-2.5 text-right font-mono font-medium ${
+                        e.delta > 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {e.delta > 0 ? `+${e.delta}` : e.delta}
                     </td>
                     <td className="px-4 py-2.5 text-right text-gray-700 font-mono">
-                      {r.qtyAfter}
+                      {e.qtyAfter != null ? e.qtyAfter : "—"}
                     </td>
                   </tr>
                 ))}

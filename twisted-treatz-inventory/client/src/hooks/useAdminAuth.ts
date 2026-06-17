@@ -25,6 +25,13 @@ export function useAdminAuth() {
     setAdmin(adminInfo);
   }, []);
 
+  // Swap in a re-issued token (e.g. after a password change revokes the
+  // old one) without touching the stored admin info.
+  const refreshToken = useCallback((newToken: string) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
+    setToken(newToken);
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(ADMIN_KEY);
@@ -48,5 +55,5 @@ export function useAdminAuth() {
     }
   }, [token, logout]);
 
-  return { token, admin, isAuthenticated, login, logout };
+  return { token, admin, isAuthenticated, login, logout, refreshToken };
 }

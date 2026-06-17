@@ -5,9 +5,12 @@ const MIN_LENGTH = 10;
 
 interface ChangePasswordProps {
   token: string;
+  // A successful change revokes all existing sessions and re-issues this
+  // one — the parent must swap the new token in or the next request 401s.
+  onTokenRefresh: (newToken: string) => void;
 }
 
-export default function ChangePassword({ token }: ChangePasswordProps) {
+export default function ChangePassword({ token, onTokenRefresh }: ChangePasswordProps) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -33,7 +36,8 @@ export default function ChangePassword({ token }: ChangePasswordProps) {
     setError(null);
     setSuccess(false);
     try {
-      await changeAdminPassword(token, current, next);
+      const result = await changeAdminPassword(token, current, next);
+      onTokenRefresh(result.token);
       setSuccess(true);
       setCurrent("");
       setNext("");
@@ -50,8 +54,8 @@ export default function ChangePassword({ token }: ChangePasswordProps) {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-base font-semibold text-gray-900">Change Password</h3>
         <p className="text-sm text-gray-500 mt-1">
-          Updates your own admin login. Existing sessions on other devices stay
-          signed in until they expire.
+          Updates your own admin login. Sessions on other devices are signed
+          out immediately; this one stays signed in.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">

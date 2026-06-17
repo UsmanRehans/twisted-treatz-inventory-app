@@ -1,7 +1,11 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma.js";
-import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
+import {
+  requireAdmin,
+  adminTokenVersionValid,
+  AdminRequest,
+} from "../middleware/requireAdmin.js";
 import { verifyToken } from "../services/tokenService.js";
 
 const router = Router();
@@ -11,11 +15,14 @@ const router = Router();
 // (before any auth exists). Never returns pinHash.
 // ?all=true (include inactive members) is honored ONLY with a valid
 // admin token — unauthenticated callers always get active members only.
-function hasValidAdminToken(req: Request): boolean {
+// Same tokenVersion check as requireAdmin: a revoked token loses the
+// elevation too.
+async function hasValidAdminToken(req: Request): Promise<boolean> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
   try {
-    return verifyToken(authHeader.slice(7)).type === "admin";
+    const payload = verifyToken(authHeader.slice(7));
+    return payload.type === "admin" && (await adminTokenVersionValid(payload));
   } catch {
     return false;
   }
@@ -23,7 +30,7 @@ function hasValidAdminToken(req: Request): boolean {
 
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const showAll = req.query.all === "true" && hasValidAdminToken(req);
+    const showAll = req.query.all === "true" && (await hasValidAdminToken(req));
 
     const members = await prisma.teamMember.findMany({
       where: showAll ? {} : { active: true },

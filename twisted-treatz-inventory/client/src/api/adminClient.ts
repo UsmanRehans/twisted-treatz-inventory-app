@@ -132,12 +132,14 @@ export async function adminLogin(
   });
 }
 
+// A successful change revokes every outstanding admin session (including
+// the token used to make the call) and returns a fresh token for this one.
 export async function changeAdminPassword(
   token: string,
   currentPassword: string,
   newPassword: string
-): Promise<{ message: string }> {
-  return adminFetch<{ message: string }>(
+): Promise<{ message: string; token: string }> {
+  return adminFetch<{ message: string; token: string }>(
     "/api/v1/auth/admin/change-password",
     token,
     {
@@ -316,6 +318,121 @@ export async function fetchReceipts(
   const qs = params.toString();
   return adminFetch<ReceiptsResponse>(
     `/api/v1/receipts${qs ? `?${qs}` : ""}`,
+    token
+  );
+}
+
+// ─── Bulk Adjustments (CSV export / import) ───────────────────────
+
+export interface AdjustmentImportRow {
+  id: number;
+  newQty: number;
+  csvQty?: number;
+  note?: string;
+}
+
+export interface AdjustmentAppliedRow {
+  id: number;
+  name: string;
+  qtyBefore: number;
+  qtyAfter: number;
+  delta: number;
+  conflict: boolean;
+  belowThreshold: boolean;
+}
+
+export interface AdjustmentSkippedRow {
+  row: number;
+  id: number | null;
+  reason: string;
+}
+
+export interface AdjustmentImportSummary {
+  changes: number;
+  unchanged: number;
+  added: number;
+  removed: number;
+  zeroed: number;
+  conflicts: number;
+  belowThreshold: number;
+  errors: number;
+}
+
+export interface AdjustmentImportResult {
+  dryRun: boolean;
+  batchId: string | null;
+  applied: AdjustmentAppliedRow[];
+  skipped: AdjustmentSkippedRow[];
+  summary: AdjustmentImportSummary;
+}
+
+export async function exportAdjustmentsCsv(
+  token: string
+): Promise<{ csv: string; productCount: number; exportedAt: string }> {
+  return adminFetch<{ csv: string; productCount: number; exportedAt: string }>(
+    "/api/v1/adjustments/export",
+    token
+  );
+}
+
+export async function importAdjustments(
+  token: string,
+  rows: AdjustmentImportRow[],
+  dryRun: boolean
+): Promise<AdjustmentImportResult> {
+  return adminFetch<AdjustmentImportResult>("/api/v1/adjustments/import", token, {
+    method: "POST",
+    body: JSON.stringify({ rows, dryRun }),
+  });
+}
+
+// ─── Unified Activity Feed (removals + receipts + adjustments) ─────
+
+export type ActivityType = "removal" | "receipt" | "adjustment";
+
+export interface ActivityEvent {
+  type: ActivityType;
+  id: string;
+  productId: number;
+  productName: string;
+  productCategory: string;
+  actorName: string;
+  delta: number;
+  qtyAfter: number | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface ActivityResponse {
+  events: ActivityEvent[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export async function fetchActivity(
+  token: string,
+  filters?: {
+    type?: ActivityType | "all";
+    memberId?: number;
+    category?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }
+): Promise<ActivityResponse> {
+  const params = new URLSearchParams();
+  if (filters?.type && filters.type !== "all") params.set("type", filters.type);
+  if (filters?.memberId) params.set("memberId", String(filters.memberId));
+  if (filters?.category) params.set("category", filters.category);
+  if (filters?.startDate) params.set("startDate", filters.startDate);
+  if (filters?.endDate) params.set("endDate", filters.endDate);
+  if (filters?.page) params.set("page", String(filters.page));
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  const qs = params.toString();
+  return adminFetch<ActivityResponse>(
+    `/api/v1/admin/activity${qs ? `?${qs}` : ""}`,
     token
   );
 }

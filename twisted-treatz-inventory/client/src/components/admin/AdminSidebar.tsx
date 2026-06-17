@@ -14,6 +14,7 @@ export type AdminTab =
   | "team"
   | "activity"
   | "receiving"
+  | "bulk"
   | "settings";
 
 export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
@@ -22,6 +23,7 @@ export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
   { id: "team", label: "Team", icon: "[o]" },
   { id: "activity", label: "Activity Log", icon: "[>]" },
   { id: "receiving", label: "Receiving", icon: "[+]" },
+  { id: "bulk", label: "Bulk Update", icon: "[~]" },
 ];
 
 export default function AdminSidebar({

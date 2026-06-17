@@ -68,7 +68,9 @@ This is a private tool used exclusively by the owner and 6 team members.
 - Team members can only remove stock; only admins can add stock
 - Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/*`, `GET /health`. Reads accept admin OR team tokens (`requireAnyAuth`); writes are role-specific
 - `pinHash` / `passwordHash` never appear in any API response
-- Both login flows are rate limited (5 attempts / 15 min, in-memory)
+- Both login flows are rate limited (5 attempts / 15 min, in-memory; expired entries are swept so the map can't grow unbounded)
+- Admin password change/reset revokes all outstanding admin JWTs: tokens carry a `tokenVersion` claim checked against `Admin.tokenVersion` on every admin-authed request (tokens minted before the claim count as 0); change-password returns a fresh token so the changing session stays signed in
+- Reset-token consumption is atomic: validate + consume happen in one `updateMany` (no find-then-update race)
 - `JWT_SECRET` must be set in production — the server refuses to boot without it
 - Alerts fire at-or-below threshold, max once per product per day
 
@@ -79,8 +81,11 @@ This is a private tool used exclusively by the owner and 6 team members.
 - New invariant-touching code needs a test in `server/tests/` before it ships
 
 ## Agent roster
-- **Active**: `qa-agent` (verifies every change — run via `/qa`), `security-agent` (cybersecurity audits — run via `/security-sweep`)
+- **Active**: `rick` (product owner + mad-scientist inventory systems expert — owns what/why, designs schemas, models data, builds features — run via `/rick`), `qa-agent` (verifies every change — run via `/qa`), `security-agent` (cybersecurity audits — run via `/security-sweep`)
 - **Retired blueprints**: `database-agent`, `auth-agent`, `alert-agent`, `ipad-ui-agent`, `admin-agent` were build-time specs for the original construction (see `docs/MASTER_KICKOFF_PROMPT.md`). They describe intent, not current state — useful as reference, don't re-run them
+
+### Workflow — Rick decides first
+Rick is the product owner. For any **new feature or structural/architectural change**, consult Rick BEFORE writing code — he owns the what/why, makes the product call, and designs. Then build, then verify with qa-agent (and security-agent if auth/data exposure is touched). Pure mechanical edits, bug fixes, and explicit user instructions don't need a Rick consult.
 
 ## Code Standards
 - ESM imports only (no require())

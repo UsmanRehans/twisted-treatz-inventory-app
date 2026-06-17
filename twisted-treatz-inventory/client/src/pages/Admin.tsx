@@ -9,6 +9,7 @@ import StatCards from "../components/admin/StatCards";
 import ProductTable from "../components/admin/ProductTable";
 import TeamMemberCards from "../components/admin/TeamMemberCards";
 import ActivityLog from "../components/admin/ActivityLog";
+import BulkUpdate from "../components/admin/BulkUpdate";
 import ChangePassword from "../components/admin/ChangePassword";
 
 // Dashboard tabs are client state on this page; "receiving" is its own
@@ -17,7 +18,7 @@ import ChangePassword from "../components/admin/ChangePassword";
 type Tab = Exclude<AdminTab, "receiving">;
 
 export default function Admin() {
-  const { token, isAuthenticated } = useAdminAuth();
+  const { token, isAuthenticated, refreshToken } = useAdminAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>(
     (location.state as { tab?: Tab } | null)?.tab ?? "overview",
@@ -46,7 +47,10 @@ export default function Admin() {
           {activeTab === "products" && <ProductTable token={token} />}
           {activeTab === "team" && <TeamMemberCards token={token} />}
           {activeTab === "activity" && <ActivityLog token={token} />}
-          {activeTab === "settings" && <ChangePassword token={token} />}
+          {activeTab === "bulk" && <BulkUpdate token={token} />}
+          {activeTab === "settings" && (
+            <ChangePassword token={token} onTokenRefresh={refreshToken} />
+          )}
         </div>
       </main>
     </div>

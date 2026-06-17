@@ -14,6 +14,7 @@ vi.mock("@sendgrid/mail", () => ({
 
 import app from "../src/app.js";
 import { prisma } from "../src/lib/prisma.js";
+import { loginAttempts } from "../src/routes/auth.js";
 import { generateAdminToken, generateTeamMemberToken } from "../src/services/tokenService.js";
 import type { MockPrisma } from "./helpers/mockPrisma.js";
 
@@ -35,6 +36,7 @@ describe("POST /api/v1/auth/admin/login", () => {
     passwordHash,
     name: "Usman",
     createdAt: new Date(),
+    tokenVersion: 0,
   };
 
   it("returns a token for valid credentials and never leaks the hash", async () => {
@@ -156,7 +158,11 @@ describe("POST /api/v1/auth/team/verify", () => {
 
 describe("POST /api/v1/auth/admin/change-password", () => {
   const NEW_PASSWORD = "brand-new-password-2026";
-  const adminToken = generateAdminToken({ id: 1, email: "usman@twistedtreatz.com" });
+  const adminToken = generateAdminToken({
+    id: 1,
+    email: "usman@twistedtreatz.com",
+    tokenVersion: 0,
+  });
   const teamToken = generateTeamMemberToken({ id: 2, name: "Jess", initials: "JR" });
 
   function change(body: Record<string, unknown>, token = adminToken) {
@@ -173,8 +179,9 @@ describe("POST /api/v1/auth/admin/change-password", () => {
       passwordHash,
       name: "Usman",
       createdAt: new Date(),
+      tokenVersion: 0,
     });
-    mockPrisma.admin.update.mockResolvedValue({ id: 1 });
+    mockPrisma.admin.update.mockResolvedValue({ id: 1, tokenVersion: 1 });
   });
 
   it("rejects unauthenticated requests with 401", async () => {
@@ -225,13 +232,18 @@ describe("POST /api/v1/auth/admin/change-password", () => {
 
   it("rate limits after 5 wrong current-password attempts", async () => {
     // Distinct admin id so this test's counter doesn't collide with others
-    const token = generateAdminToken({ id: 55, email: "rl@twistedtreatz.com" });
+    const token = generateAdminToken({
+      id: 55,
+      email: "rl@twistedtreatz.com",
+      tokenVersion: 0,
+    });
     mockPrisma.admin.findUnique.mockResolvedValue({
       id: 55,
       email: "rl@twistedtreatz.com",
       passwordHash,
       name: "RL",
       createdAt: new Date(),
+      tokenVersion: 0,
     });
 
     for (let i = 0; i < 5; i++) {
@@ -243,5 +255,36 @@ describe("POST /api/v1/auth/admin/change-password", () => {
       token,
     );
     expect(blocked.status).toBe(429);
+  });
+});
+
+// Runs LAST: it jumps Date.now past every window opened above, which would
+// reset earlier rate-limit state if anything ran after it.
+describe("login attempt map sweep", () => {
+  const WINDOW_MS = 15 * 60 * 1000;
+
+  it("drops expired entries on later traffic instead of growing forever", async () => {
+    mockPrisma.admin.findUnique.mockResolvedValue(null);
+
+    await request(app)
+      .post("/api/v1/auth/admin/login")
+      .send({ email: "sweep-me@twistedtreatz.com", password: "nope" });
+    expect(loginAttempts.has("admin:sweep-me@twistedtreatz.com")).toBe(true);
+
+    // Jump past the window; the next checkRateLimit call sweeps stale keys
+    const nowSpy = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.now() + WINDOW_MS + 60 * 1000);
+    try {
+      await request(app)
+        .post("/api/v1/auth/admin/login")
+        .send({ email: "fresh@twistedtreatz.com", password: "nope" });
+
+      expect(loginAttempts.has("admin:sweep-me@twistedtreatz.com")).toBe(false);
+      // The live attempt that triggered the sweep is still tracked
+      expect(loginAttempts.has("admin:fresh@twistedtreatz.com")).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 });
