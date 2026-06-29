@@ -21,6 +21,13 @@ function norm(s: unknown): string {
   return String(s ?? "").trim().toLowerCase();
 }
 
+// DoS guards: a hostile/oversized workbook is parsed entirely in the admin's
+// browser tab, so cap before and after read. 15 MB and 10k rows are far above
+// a real candy-shop catalog (~300 rows) but stop a zip-bomb / billion-cell
+// sheet from hanging the tab. The server independently caps the batch at 2000.
+const MAX_BYTES = 15 * 1024 * 1024;
+const MAX_SHEET_ROWS = 10_000;
+
 export interface ParsedSheet {
   rows: CatalogImportRow[];
   /** Canonical fields we could NOT find a column for (e.g. ["brand"]). */
@@ -29,6 +36,9 @@ export interface ParsedSheet {
 }
 
 export async function parseInventorySheet(file: File): Promise<ParsedSheet> {
+  if (file.size > MAX_BYTES) {
+    throw new Error(`File is too large (max ${Math.floor(MAX_BYTES / 1024 / 1024)} MB)`);
+  }
   const buf = await file.arrayBuffer();
   // cellFormula:false avoids carrying formula strings; we only want values.
   const wb = XLSX.read(buf, { type: "array", cellFormula: false, cellHTML: false });
@@ -39,6 +49,9 @@ export async function parseInventorySheet(file: File): Promise<ParsedSheet> {
   // Array-of-arrays so we can locate the header row ourselves.
   const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: null });
   if (grid.length < 2) throw new Error("The sheet has no data rows");
+  if (grid.length > MAX_SHEET_ROWS) {
+    throw new Error(`Sheet has too many rows (max ${MAX_SHEET_ROWS.toLocaleString()})`);
+  }
 
   const headerRow = grid[0].map(norm);
   const colOf = (field: keyof typeof ALIASES): number => {

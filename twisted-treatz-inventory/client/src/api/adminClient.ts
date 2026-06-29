@@ -482,6 +482,11 @@ export interface CatalogFlagged {
   missing: CatalogMissingField[];
 }
 
+export interface CatalogApplyFailure {
+  item: string;
+  reason: string;
+}
+
 export interface CatalogImportSummary {
   creates: number;
   updates: number;
@@ -490,6 +495,7 @@ export interface CatalogImportSummary {
   brandsToCreate: number;
   flagged: number;
   unchanged: number;
+  failed: number;
   errors: number;
 }
 
@@ -501,6 +507,7 @@ export interface CatalogImportResult {
   brandsToCreate: string[];
   flagged: CatalogFlagged[];
   skipped: CatalogSkippedRow[];
+  applyFailures: CatalogApplyFailure[];
   unchanged: number;
   summary: CatalogImportSummary;
 }

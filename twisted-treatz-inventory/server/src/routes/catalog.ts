@@ -223,82 +223,103 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
 
     const batchId = isDryRun ? null : randomUUID();
 
+    // Per-row apply failures (a DB error on one row must NOT abort the batch
+    // or hide what already committed — on a 300-row import that's unrecoverable
+    // without a report). Each create/update is independent and already its own
+    // transaction; we catch around each so the rest of the import still lands.
+    const applyFailures: { item: string; reason: string }[] = [];
+
     if (!isDryRun) {
-      // 1. Create missing brands, fill the id map.
+      // 1. Create missing brands, fill the id map. A brand that fails here just
+      //    leaves its products unbranded (brandId null) — surfaced per-row below.
       for (const name of brandsToCreate) {
-        const created = await prisma.brand.upsert({
-          where: { name },
-          update: {},
-          create: { name },
-          select: { id: true, name: true },
-        });
-        brandIdByName.set(created.name, created.id);
+        try {
+          const created = await prisma.brand.upsert({
+            where: { name },
+            update: {},
+            create: { name },
+            select: { id: true, name: true },
+          });
+          brandIdByName.set(created.name, created.id);
+        } catch (err) {
+          console.error("Catalog import: brand upsert failed", name, err);
+        }
       }
 
       // 2. Create new products at qty 0, then (if counted >0) one Adjustment
       //    that moves 0→qty so the count has an audit row.
       for (const c of creates) {
-        const created = await prisma.product.create({
-          data: {
-            name: c.item,
-            category: c.category ?? "Uncategorized",
-            purchaseUnit: "Each", // required field; admin can refine later
-            packSize: c.packSize,
-            uom: c.uom,
-            brandId: c.brand ? (brandIdByName.get(c.brand) ?? null) : null,
-            currentQty: 0, // ← invariant: products are born empty
-          },
-          select: { id: true },
-        });
-        if (c.qty > 0) {
-          await prisma.$transaction([
-            prisma.product.update({ where: { id: created.id }, data: { currentQty: c.qty } }),
-            prisma.adjustment.create({
-              data: {
-                productId: created.id,
-                adminId,
-                delta: c.qty,
-                qtyBefore: 0,
-                qtyAfter: c.qty,
-                reason: "Catalog import (initial count)",
-                batchId: batchId!,
-              },
-            }),
-          ]);
+        try {
+          const created = await prisma.product.create({
+            data: {
+              name: c.item,
+              category: c.category ?? "Uncategorized",
+              purchaseUnit: "Each", // required field; admin can refine later
+              packSize: c.packSize,
+              uom: c.uom,
+              brandId: c.brand ? (brandIdByName.get(c.brand) ?? null) : null,
+              currentQty: 0, // ← invariant: products are born empty
+            },
+            select: { id: true },
+          });
+          if (c.qty > 0) {
+            await prisma.$transaction([
+              prisma.product.update({ where: { id: created.id }, data: { currentQty: c.qty } }),
+              prisma.adjustment.create({
+                data: {
+                  productId: created.id,
+                  adminId,
+                  delta: c.qty,
+                  qtyBefore: 0,
+                  qtyAfter: c.qty,
+                  reason: "Catalog import (initial count)",
+                  batchId: batchId!,
+                },
+              }),
+            ]);
+          }
+        } catch (err) {
+          console.error("Catalog import: create failed", c.item, err);
+          applyFailures.push({ item: c.item, reason: "Could not be created" });
         }
       }
 
       // 3. Apply updates. Catalog fields are a plain update; a qty change is
       //    paired with an Adjustment in the same transaction.
       for (const u of updates) {
-        const data: Record<string, unknown> = {};
-        if ("category" in u.changes) data.category = u.changes.category.to;
-        if ("packSize" in u.changes) data.packSize = u.changes.packSize.to;
-        if ("uom" in u.changes) data.uom = u.changes.uom.to;
-        if ("brand" in u.changes) {
-          const bn = u.changes.brand.to as string;
-          data.brandId = brandIdByName.get(bn) ?? null;
-        }
-        if (u.qtyDelta !== 0) data.currentQty = u.qtyAfter;
+        try {
+          const data: Record<string, unknown> = {};
+          if ("category" in u.changes) data.category = u.changes.category.to;
+          if ("packSize" in u.changes) data.packSize = u.changes.packSize.to;
+          if ("uom" in u.changes) data.uom = u.changes.uom.to;
+          if ("brand" in u.changes) {
+            const bn = u.changes.brand.to as string;
+            data.brandId = brandIdByName.get(bn) ?? null;
+          }
+          if (u.qtyDelta !== 0) data.currentQty = u.qtyAfter;
 
-        await prisma.$transaction([
-          prisma.product.update({ where: { id: u.id }, data }),
-          ...(u.qtyDelta !== 0
-            ? [
-                prisma.adjustment.create({
-                  data: {
-                    productId: u.id,
-                    adminId,
-                    delta: u.qtyDelta,
-                    qtyBefore: u.qtyBefore,
-                    qtyAfter: u.qtyAfter,
-                    reason: "Catalog import",
-                    batchId: batchId!,
-                  },
-                }),
-              ]
-            : []),
-        ]);
+          await prisma.$transaction([
+            prisma.product.update({ where: { id: u.id }, data }),
+            ...(u.qtyDelta !== 0
+              ? [
+                  prisma.adjustment.create({
+                    data: {
+                      productId: u.id,
+                      adminId,
+                      delta: u.qtyDelta,
+                      qtyBefore: u.qtyBefore,
+                      qtyAfter: u.qtyAfter,
+                      reason: "Catalog import",
+                      batchId: batchId!,
+                    },
+                  }),
+                ]
+              : []),
+          ]);
+        } catch (err) {
+          console.error("Catalog import: update failed", u.item, err);
+          applyFailures.push({ item: u.item, reason: "Could not be updated" });
+        }
       }
     }
 
@@ -312,8 +333,10 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
         brandsToCreate,
         flagged,
         skipped,
+        applyFailures,
         unchanged,
         summary: {
+          // creates/updates are PLANNED counts; failed is how many didn't land.
           creates: creates.length,
           updates: updates.length,
           qtyChanges: updates.filter((u) => u.qtyDelta !== 0).length,
@@ -321,6 +344,7 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
           brandsToCreate: brandsToCreate.length,
           flagged: flagged.length,
           unchanged,
+          failed: applyFailures.length,
           errors: skipped.length,
         },
       },
