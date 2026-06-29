@@ -81,7 +81,8 @@ This is a private tool used exclusively by the owner and 6 team members.
 - New invariant-touching code needs a test in `server/tests/` before it ships
 
 ## Agent roster
-- **Active**: `rick` (product owner + mad-scientist inventory systems expert — owns what/why, designs schemas, models data, builds features — run via `/rick`), `qa-agent` (verifies every change — run via `/qa`), `security-agent` (cybersecurity audits — run via `/security-sweep`)
+- **Active**: `rick` (product owner + mad-scientist inventory systems expert — owns what/why, designs schemas, models data, builds features — run via `/rick`), `isaiah` (software architect — owns the technical HOW: data model integrity, API contracts, transactions, auth architecture, migrations, deploy topology — run via `/isaiah`), `gideon` (access & identity manager — creates/resets/deactivates team-member + admin accounts, owns the auth/permission surface — run via `/gideon`), `avery` (data analyst — read-only analysis of inventory data: trends, stock health, reorder points; asks clarifying questions, explains clearly — run via `/avery`), `qa-agent` (verifies every change — run via `/qa`), `security-agent` (cybersecurity audits — run via `/security-sweep`)
+- **Division of labor**: Rick = what/why (product) · Isaiah = how (architecture) · Gideon = who (users/access) · Avery = what the data says (analysis) · qa-agent + security-agent = verification
 - **Retired blueprints**: `database-agent`, `auth-agent`, `alert-agent`, `ipad-ui-agent`, `admin-agent` were build-time specs for the original construction (see `docs/MASTER_KICKOFF_PROMPT.md`). They describe intent, not current state — useful as reference, don't re-run them
 
 ### Workflow — Rick decides first
