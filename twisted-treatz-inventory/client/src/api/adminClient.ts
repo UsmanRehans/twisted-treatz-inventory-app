@@ -32,6 +32,8 @@ export interface AdminProduct {
   flavor: string | null;
   purchaseUnit: string;
   unitSize: string | null;
+  packSize: string | null; // Decimal serializes to string over the wire
+  uom: string | null;
   brand: string | null;
   brandId: number | null;
   supplier: string | null;
@@ -229,6 +231,8 @@ export interface CreateProductData {
   purchaseUnit: string;
   flavor?: string | null;
   unitSize?: string | null;
+  packSize?: number | null;
+  uom?: string | null;
   brandId?: number | null;
   supplier?: string | null;
   usedIn?: string | null;
@@ -427,6 +431,86 @@ export async function importAdjustments(
   dryRun: boolean
 ): Promise<AdjustmentImportResult> {
   return adminFetch<AdjustmentImportResult>("/api/v1/adjustments/import", token, {
+    method: "POST",
+    body: JSON.stringify({ rows, dryRun }),
+  });
+}
+
+// ─── Catalog import (Hani's master sheet) ─────────────────────────
+// Ingests Item/Category/Qty/Pack Size/UOM/Brand rows: creates products we
+// don't have, updates catalog fields on the ones we do, and routes the
+// counted Qty through an audited Adjustment. Always preview before apply.
+
+export type CatalogMissingField = "qty" | "packSize" | "uom" | "brand";
+
+export interface CatalogImportRow {
+  item: string;
+  category?: string | null;
+  brand?: string | null;
+  packSize?: number | null;
+  uom?: string | null;
+  qty?: number | null;
+}
+
+export interface CatalogCreate {
+  item: string;
+  category: string | null;
+  brand: string | null;
+  packSize: number | null;
+  uom: string | null;
+  qty: number;
+  missing: CatalogMissingField[];
+}
+
+export interface CatalogUpdate {
+  id: number;
+  item: string;
+  changes: Record<string, { from: unknown; to: unknown }>;
+  qtyBefore: number;
+  qtyAfter: number;
+  qtyDelta: number;
+}
+
+export interface CatalogSkippedRow {
+  row: number;
+  item: string | null;
+  reason: string;
+}
+
+export interface CatalogFlagged {
+  item: string;
+  missing: CatalogMissingField[];
+}
+
+export interface CatalogImportSummary {
+  creates: number;
+  updates: number;
+  qtyChanges: number;
+  zeroed: number;
+  brandsToCreate: number;
+  flagged: number;
+  unchanged: number;
+  errors: number;
+}
+
+export interface CatalogImportResult {
+  dryRun: boolean;
+  batchId: string | null;
+  creates: CatalogCreate[];
+  updates: CatalogUpdate[];
+  brandsToCreate: string[];
+  flagged: CatalogFlagged[];
+  skipped: CatalogSkippedRow[];
+  unchanged: number;
+  summary: CatalogImportSummary;
+}
+
+export async function importCatalog(
+  token: string,
+  rows: CatalogImportRow[],
+  dryRun: boolean
+): Promise<CatalogImportResult> {
+  return adminFetch<CatalogImportResult>("/api/v1/catalog/import", token, {
     method: "POST",
     body: JSON.stringify({ rows, dryRun }),
   });

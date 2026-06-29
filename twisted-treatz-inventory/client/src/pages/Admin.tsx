@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAdminAuth } from "../hooks/useAdminAuth";
 import AdminSidebar, {
@@ -10,6 +10,9 @@ import ProductTable from "../components/admin/ProductTable";
 import TeamMemberCards from "../components/admin/TeamMemberCards";
 import ActivityLog from "../components/admin/ActivityLog";
 import BulkUpdate from "../components/admin/BulkUpdate";
+// Lazy — pulls in the heavy SheetJS parser only when the admin opens this
+// tab, keeping it out of the main bundle the iPad floor app downloads.
+const CatalogImport = lazy(() => import("../components/admin/CatalogImport"));
 import ChangePassword from "../components/admin/ChangePassword";
 
 // Dashboard tabs are client state on this page; "receiving" is its own
@@ -48,6 +51,11 @@ export default function Admin() {
           {activeTab === "team" && <TeamMemberCards token={token} />}
           {activeTab === "activity" && <ActivityLog token={token} />}
           {activeTab === "bulk" && <BulkUpdate token={token} />}
+          {activeTab === "catalog" && (
+            <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
+              <CatalogImport token={token} />
+            </Suspense>
+          )}
           {activeTab === "settings" && (
             <ChangePassword token={token} onTokenRefresh={refreshToken} />
           )}

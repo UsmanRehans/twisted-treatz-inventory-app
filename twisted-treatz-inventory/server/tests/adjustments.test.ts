@@ -84,14 +84,16 @@ describe("adjustments — authorization (admin only)", () => {
 describe("GET /api/v1/adjustments/export", () => {
   it("emits a BOM + header and one row per active product", async () => {
     mockPrisma.product.findMany.mockResolvedValue([
-      { id: 7, name: "Sour Patch Bulk", category: "Sour Candy", purchaseUnit: "Bag", unitSize: "5 lb", currentQty: 4 },
-      { id: 8, name: "Gummy Bears Bulk", category: "Gummy", purchaseUnit: "Box", unitSize: null, currentQty: 100 },
+      { id: 7, name: "Sour Patch Bulk", category: "Sour Candy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 4 },
+      { id: 8, name: "Gummy Bears Bulk", category: "Gummy", brand: null, packSize: null, uom: null, currentQty: 100 },
     ]);
     const res = await request(app).get("/api/v1/adjustments/export").set(auth(adminToken));
     expect(res.status).toBe(200);
     const csv: string = res.body.data.csv;
     expect(csv.charCodeAt(0)).toBe(0xfeff); // UTF-8 BOM
-    expect(csv).toContain("id,name,category,purchase_unit,unit_size,current_qty,new_qty,note");
+    // Header mirrors Hani's master sheet (Item/Category/Brand/Pack Size/UOM/Qty)
+    // plus the round-trip machinery (id, new_qty, note).
+    expect(csv).toContain("id,item,category,brand,pack_size,uom,qty,new_qty,note");
     expect(res.body.data.productCount).toBe(2);
   });
 
@@ -101,8 +103,9 @@ describe("GET /api/v1/adjustments/export", () => {
         id: 9,
         name: "=cmd|'/c calc'!A1",
         category: "Gummy",
-        purchaseUnit: "Bag",
-        unitSize: "5 lb",
+        brand: { name: "Boston" },
+        packSize: 5,
+        uom: "lb",
         currentQty: 3,
       },
     ]);
