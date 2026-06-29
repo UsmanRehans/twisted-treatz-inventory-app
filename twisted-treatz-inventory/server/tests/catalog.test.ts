@@ -181,6 +181,39 @@ describe("catalog import — apply (updates)", () => {
   });
 });
 
+// ─── Per-row apply failures don't abort the batch (QA-1) ────────
+describe("catalog import — partial apply failure", () => {
+  it("reports a create that fails to save and still applies the rest", async () => {
+    mockPrisma.product.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+      if (data.name === "Bad Save") return Promise.reject(new Error("db boom"));
+      return Promise.resolve({ id: ++createdId, ...data });
+    });
+    const res = await importCatalog({
+      rows: [
+        { item: "Bad Save", category: "Gummy", brand: "Boston", packSize: 1, uom: "lb", qty: 1 },
+        { item: "Good Save", category: "Gummy", brand: "Boston", packSize: 1, uom: "lb", qty: 1 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const failures = res.body.data.applyFailures as { item: string; reason: string }[];
+    expect(failures).toHaveLength(1);
+    expect(failures[0].item).toBe("Bad Save");
+    expect(res.body.data.summary.failed).toBe(1);
+    // The good row still created (create called for both)
+    expect(mockPrisma.product.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports an update whose transaction fails without 500ing", async () => {
+    mockPrisma.$transaction.mockRejectedValueOnce(new Error("db boom"));
+    const res = await importCatalog({
+      rows: [{ item: "Fruit Slices Assorted", brand: "Boston", packSize: 30, uom: "lb", qty: 99 }],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.summary.failed).toBe(1);
+    expect(res.body.data.applyFailures[0].item).toBe("Fruit Slices Assorted");
+  });
+});
+
 // ─── Empty-cell rule: blank Qty → 0 + flag; blank others → flag ──
 describe("catalog import — empty cells", () => {
   it("flags a blank Qty, treats it as 0, and counts the zeroing", async () => {
