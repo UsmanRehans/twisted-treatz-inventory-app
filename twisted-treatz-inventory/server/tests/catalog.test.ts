@@ -77,6 +77,46 @@ describe("catalog import — authorization (admin only)", () => {
   });
 });
 
+// ─── Export template ────────────────────────────────────────────
+describe("GET /api/v1/catalog/export — pre-filled template", () => {
+  it("rejects unauthenticated requests", async () => {
+    const res = await request(app).get("/api/v1/catalog/export");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects team member tokens", async () => {
+    const res = await request(app).get("/api/v1/catalog/export").set(auth(teamToken));
+    expect(res.status).toBe(403);
+  });
+
+  it("emits a BOM + the importer's column headers and one row per active product", async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      { name: "Sour Patch Bulk", category: "Sour Candy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 4 },
+      { name: "Gummy Bears Bulk", category: "Gummy", brand: null, packSize: null, uom: null, currentQty: 100 },
+    ]);
+    const res = await request(app).get("/api/v1/catalog/export").set(auth(adminToken));
+    expect(res.status).toBe(200);
+    const csv: string = res.body.data.csv;
+    expect(csv.charCodeAt(0)).toBe(0xfeff); // UTF-8 BOM
+    // Headers match the importer's aliases exactly so the file round-trips.
+    expect(csv).toContain("Item,Category,Qty,Pack Size,UOM,Brand");
+    // Qty is pre-filled with on-hand; blank brand/pack/uom export as empty cells.
+    expect(csv).toContain(`"Sour Patch Bulk","Sour Candy",4,5,"lb","Boston"`);
+    expect(csv).toContain(`"Gummy Bears Bulk","Gummy",100,,"",""`);
+    expect(res.body.data.productCount).toBe(2);
+  });
+
+  it("neutralizes formula-injection cells (= + - @)", async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      { name: "=cmd|'/c calc'!A1", category: "Gummy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 3 },
+    ]);
+    const res = await request(app).get("/api/v1/catalog/export").set(auth(adminToken));
+    const csv: string = res.body.data.csv;
+    expect(csv).toContain(`"'=cmd|'`);
+    expect(csv).not.toContain(`,=cmd`);
+  });
+});
+
 // ─── Dry run classification ─────────────────────────────────────
 describe("catalog import — dry run", () => {
   it("classifies create vs update and writes nothing", async () => {

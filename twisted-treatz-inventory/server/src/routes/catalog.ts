@@ -40,6 +40,69 @@ function lc(s: string): string {
   return s.trim().toLowerCase();
 }
 
+// Excel executes cells starting with = + - @ (or tab/CR) as formulas. Quote
+// every text cell and neutralize formula triggers with a leading ' (mirrors
+// the same guard in adjustments.ts).
+function escapeCsvCell(value: string): string {
+  let cell = value;
+  if (/^[=+\-@\t\r]/.test(cell)) {
+    cell = `'${cell}`;
+  }
+  return `"${cell.replace(/"/g, '""')}"`;
+}
+
+// ─── GET /api/v1/catalog/export ──────────────────────────────────────
+// Admin only — the import TEMPLATE, pre-filled with every active product in
+// the exact columns the importer reads back (Item, Category, Qty, Pack Size,
+// UOM, Brand). Hani edits in place and re-uploads; matching is by name, so a
+// row left untouched comes back as "unchanged" (its Qty already equals what's
+// on hand) — no accidental zeroing from a blank template.
+router.get("/export", requireAdmin, async (_req: AdminRequest, res: Response) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { active: true },
+      select: {
+        name: true,
+        category: true,
+        brand: { select: { name: true } },
+        packSize: true,
+        uom: true,
+        currentQty: true,
+      },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
+    });
+
+    // Header labels match the importer's column aliases exactly so the file
+    // round-trips without any manual fixup.
+    const header = "Item,Category,Qty,Pack Size,UOM,Brand";
+    const lines = products.map((p) =>
+      [
+        escapeCsvCell(p.name),
+        escapeCsvCell(p.category),
+        String(p.currentQty),
+        p.packSize != null ? p.packSize.toString() : "",
+        escapeCsvCell(p.uom ?? ""),
+        escapeCsvCell(p.brand?.name ?? ""),
+      ].join(","),
+    );
+
+    // UTF-8 BOM + CRLF so Excel opens it cleanly
+    const csv = "\uFEFF" + [header, ...lines].join("\r\n") + "\r\n";
+
+    res.json({
+      success: true,
+      data: {
+        csv,
+        productCount: products.length,
+        exportedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Catalog export error:", err);
+    res.status(500).json({ success: false, data: null, error: "Internal server error" });
+  }
+});
+
 router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) => {
   try {
     const { rows, dryRun } = req.body as { rows?: unknown; dryRun?: unknown };

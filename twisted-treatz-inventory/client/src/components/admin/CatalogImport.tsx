@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import {
+  exportCatalogCsv,
   importCatalog,
   type CatalogImportRow,
   type CatalogImportResult,
@@ -38,6 +39,25 @@ export default function CatalogImport({ token }: CatalogImportProps) {
     setMissingCols([]);
     setZeroConfirm("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleDownloadTemplate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { csv } = await exportCatalogCsv(token);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `catalog-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not download the template");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -93,6 +113,8 @@ export default function CatalogImport({ token }: CatalogImportProps) {
         We match by item name: products we already have are updated, new ones are
         created, and the counted Qty is recorded in the Activity Log. A blank Qty
         is treated as 0 and flagged. Nothing is saved until you review the preview.
+        Don't have a sheet handy? Download the template below — it's pre-filled
+        with every current item so you can add new rows and edit in place.
       </div>
 
       {error && (
@@ -100,6 +122,26 @@ export default function CatalogImport({ token }: CatalogImportProps) {
           {error}
         </div>
       )}
+
+      {/* Download template */}
+      <div className="mb-4 p-5 border border-gray-200 rounded-lg bg-white">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="font-medium text-gray-900">Download template</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              A CSV pre-filled with every current item and its on-hand Qty. Add
+              new rows, edit what changed, then upload it below.
+            </p>
+          </div>
+          <button
+            onClick={handleDownloadTemplate}
+            disabled={busy}
+            className="shrink-0 px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-200 disabled:opacity-50 cursor-pointer transition-colors"
+          >
+            Download template
+          </button>
+        </div>
+      </div>
 
       {/* Upload */}
       <div className="p-5 border border-gray-200 rounded-lg bg-white">
