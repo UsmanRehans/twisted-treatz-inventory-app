@@ -72,7 +72,10 @@ export default function BulkUpdate({ token }: BulkUpdateProps) {
       const header = table[0].map((h) => h.trim().toLowerCase());
       const idCol = header.indexOf("id");
       const newQtyCol = header.indexOf("new_qty");
-      const curQtyCol = header.indexOf("current_qty");
+      // "qty" is the current-on-hand reference column (renamed from
+      // "current_qty"); fall back to the old name for pre-existing downloads.
+      const curQtyCol =
+        header.indexOf("qty") !== -1 ? header.indexOf("qty") : header.indexOf("current_qty");
       const noteCol = header.indexOf("note");
       if (idCol === -1 || newQtyCol === -1) {
         throw new Error('CSV must include "id" and "new_qty" columns');

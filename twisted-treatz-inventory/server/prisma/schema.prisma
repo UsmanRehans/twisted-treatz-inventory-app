@@ -13,7 +13,11 @@ model Product {
   category       String
   flavor         String?
   purchaseUnit   String // "Bag", "Box", "Gallon", "Bucket" etc
-  unitSize       String? // "5 lb", "128 oz" etc
+  unitSize       String? // "5 lb", "128 oz" etc — legacy free-text, derived from packSize+uom going forward
+  // Hani's master sheet keeps these two separate, so we do too:
+  // packSize is numeric (30, 20, 26.4 → Decimal, NOT Int), uom is the unit ("lb", "ct").
+  packSize       Decimal?  @db.Decimal(10, 3)
+  uom            String?
   // Transitional: the original free-text brand column, renamed from `brand`.
   // Source for the one-time brand backfill; dropped once brandId is populated.
   brandText      String?

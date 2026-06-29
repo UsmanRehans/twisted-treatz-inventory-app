@@ -32,6 +32,8 @@ export default function AddProductModal({
   const [purchaseUnit, setPurchaseUnit] = useState("");
   const [flavor, setFlavor] = useState("");
   const [unitSize, setUnitSize] = useState("");
+  const [packSize, setPackSize] = useState("");
+  const [uom, setUom] = useState("");
   const [supplier, setSupplier] = useState("");
   const [usedIn, setUsedIn] = useState("");
   const [alertThreshold, setAlertThreshold] = useState("10");
@@ -67,6 +69,7 @@ export default function AddProductModal({
 
       const threshold = parseInt(alertThreshold, 10);
       const price = unitPrice.trim() === "" ? null : Number(unitPrice);
+      const pack = packSize.trim() === "" ? null : Number(packSize);
 
       const data: CreateProductData = {
         name: name.trim(),
@@ -74,6 +77,8 @@ export default function AddProductModal({
         purchaseUnit: purchaseUnit.trim(),
         flavor: flavor.trim() || null,
         unitSize: unitSize.trim() || null,
+        packSize: pack !== null && !isNaN(pack) ? pack : null,
+        uom: uom.trim() || null,
         supplier: supplier.trim() || null,
         usedIn: usedIn.trim() || null,
         brandId,
@@ -177,13 +182,50 @@ export default function AddProductModal({
             )}
           </div>
 
+          {/* Pack Size + UOM mirror Hani's master sheet — kept as two fields,
+              not one free-text blob. Pack Size is numeric (e.g. 30, 26.4). */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>Pack Size</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                className={field}
+                value={packSize}
+                onChange={(e) => setPackSize(e.target.value)}
+                placeholder="e.g. 30"
+              />
+            </div>
+            <div>
+              <label className={label}>UOM</label>
+              <input
+                className={field}
+                value={uom}
+                onChange={(e) => setUom(e.target.value)}
+                list="uom-options"
+                placeholder="e.g. lb"
+              />
+              <datalist id="uom-options">
+                <option value="lb" />
+                <option value="ct" />
+                <option value="oz" />
+                <option value="each" />
+                <option value="case" />
+                <option value="box" />
+                <option value="bag" />
+                <option value="gallon" />
+              </datalist>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>Flavor</label>
               <input className={field} value={flavor} onChange={(e) => setFlavor(e.target.value)} />
             </div>
             <div>
-              <label className={label}>Unit Size</label>
+              <label className={label}>Unit Size (optional)</label>
               <input
                 className={field}
                 value={unitSize}

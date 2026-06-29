@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
 import { requireAnyAuth, AuthedRequest } from "../middleware/requireAnyAuth.js";
+import { normalizeUom, parsePackSize } from "../lib/measure.js";
 
 const router = Router();
 
@@ -17,6 +18,8 @@ const productSelect = {
   flavor: true,
   purchaseUnit: true,
   unitSize: true,
+  packSize: true,
+  uom: true,
   brandId: true,
   brand: { select: { id: true, name: true } },
   supplier: true,
@@ -127,6 +130,8 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
       flavor,
       purchaseUnit,
       unitSize,
+      packSize,
+      uom,
       brandId,
       supplier,
       usedIn,
@@ -164,6 +169,13 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
       }
     }
 
+    // packSize: optional numeric (Hani's "Pack Size"); reject if present-but-bad
+    const packParsed = parsePackSize(packSize);
+    if (!packParsed.ok) {
+      res.status(400).json({ success: false, data: null, error: packParsed.reason });
+      return;
+    }
+
     // alertThreshold: optional, defaults to 10, must be non-negative
     let threshold = 10;
     if (alertThreshold !== undefined && alertThreshold !== null) {
@@ -185,6 +197,8 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
         flavor: flavor ?? null,
         purchaseUnit: purchaseUnit.trim(),
         unitSize: unitSize ?? null,
+        packSize: packParsed.value,
+        uom: normalizeUom(uom),
         brandId: brandId ?? null,
         supplier: supplier ?? null,
         usedIn: usedIn ?? null,
@@ -270,7 +284,16 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
 
     // Only allow specific fields to be updated. currentQty is deliberately
     // NOT here — stock only moves through Removals/Receipts/Adjustments.
-    const allowedFields = ["alertThreshold", "name", "category", "active", "unitPrice", "brandId"];
+    const allowedFields = [
+      "alertThreshold",
+      "name",
+      "category",
+      "active",
+      "unitPrice",
+      "brandId",
+      "packSize",
+      "uom",
+    ];
     const updateData: Record<string, unknown> = {};
 
     for (const field of allowedFields) {
@@ -283,9 +306,23 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       res.status(400).json({
         success: false,
         data: null,
-        error: "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId",
+        error:
+          "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId, packSize, uom",
       });
       return;
+    }
+
+    // Normalize packSize / uom if provided. null clears the field.
+    if (updateData.packSize !== undefined && updateData.packSize !== null) {
+      const packParsed = parsePackSize(updateData.packSize);
+      if (!packParsed.ok) {
+        res.status(400).json({ success: false, data: null, error: packParsed.reason });
+        return;
+      }
+      updateData.packSize = packParsed.value;
+    }
+    if (updateData.uom !== undefined && updateData.uom !== null) {
+      updateData.uom = normalizeUom(updateData.uom);
     }
 
     // Validate alertThreshold if provided

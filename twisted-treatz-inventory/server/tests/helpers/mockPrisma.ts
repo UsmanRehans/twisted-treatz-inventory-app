@@ -19,6 +19,7 @@ export function createMockPrisma() {
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      upsert: vi.fn(),
     },
     teamMember: {
       findUnique: vi.fn(),

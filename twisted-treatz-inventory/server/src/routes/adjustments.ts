@@ -34,21 +34,27 @@ router.get("/export", requireAdmin, async (_req: AdminRequest, res: Response) =>
         id: true,
         name: true,
         category: true,
-        purchaseUnit: true,
-        unitSize: true,
+        brand: { select: { name: true } },
+        packSize: true,
+        uom: true,
         currentQty: true,
       },
       orderBy: [{ category: "asc" }, { name: "asc" }],
     });
 
-    const header = "id,name,category,purchase_unit,unit_size,current_qty,new_qty,note";
+    // Column order mirrors Hani's master sheet (Item, Category, Brand, Pack
+    // Size, UOM, Qty) so the download is recognizably "the same sheet", plus
+    // the machinery the quantity round-trip needs: id (match key), new_qty
+    // (the one editable column), and note (lands in Adjustment.reason).
+    const header = "id,item,category,brand,pack_size,uom,qty,new_qty,note";
     const lines = products.map((p) =>
       [
         String(p.id),
         escapeCsvCell(p.name),
         escapeCsvCell(p.category),
-        escapeCsvCell(p.purchaseUnit),
-        escapeCsvCell(p.unitSize ?? ""),
+        escapeCsvCell(p.brand?.name ?? ""),
+        p.packSize != null ? p.packSize.toString() : "",
+        escapeCsvCell(p.uom ?? ""),
         String(p.currentQty),
         "", // new_qty — the one editable column; blank = no change
         "", // note — optional, lands in Adjustment.reason
