@@ -11,6 +11,7 @@ import { useAdminAuth } from "../../hooks/useAdminAuth";
 export type AdminTab =
   | "overview"
   | "products"
+  | "stock"
   | "team"
   | "activity"
   | "receiving"
@@ -21,6 +22,7 @@ export type AdminTab =
 export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "[=]" },
   { id: "products", label: "Products", icon: "[#]" },
+  { id: "stock", label: "Stock Health", icon: "[!]" },
   { id: "team", label: "Team", icon: "[o]" },
   { id: "activity", label: "Activity Log", icon: "[>]" },
   { id: "receiving", label: "Receiving", icon: "[+]" },

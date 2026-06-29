@@ -10,6 +10,7 @@ interface ProductGridProps {
   onSelectProduct: (product: Product) => void;
   onLogout: () => void;
   onActivity: () => void;
+  onStock: () => void;
   memberName: string;
   loading: boolean;
 }
@@ -21,6 +22,7 @@ export default function ProductGrid({
   onSelectProduct,
   onLogout,
   onActivity,
+  onStock,
   memberName,
   loading,
 }: ProductGridProps) {
@@ -53,6 +55,12 @@ export default function ProductGrid({
           placeholder="Search products..."
           className="flex-1 min-h-[48px] px-4 rounded-lg border border-gray-200 bg-gray-50 text-[16px] text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400"
         />
+        <button
+          onClick={onStock}
+          className="min-h-[48px] px-5 rounded-lg bg-gray-100 text-[16px] text-gray-600 font-medium active:bg-gray-200 flex-shrink-0"
+        >
+          Low Stock
+        </button>
         <button
           onClick={onActivity}
           className="min-h-[48px] px-5 rounded-lg bg-gray-100 text-[16px] text-gray-600 font-medium active:bg-gray-200 flex-shrink-0"
