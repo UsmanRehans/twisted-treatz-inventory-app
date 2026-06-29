@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcrypt";
+import { normalizeBrandName } from "../src/lib/brand.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -111,7 +112,7 @@ async function main() {
       flavor,
       purchaseUnit: purchasedIn,
       unitSize,
-      brand,
+      brandText: brand, // raw cleaned brand value; brandId linked below
       supplier: null, // CSV doesn't have a dedicated supplier column
       usedIn,
       currentQty,
@@ -128,10 +129,29 @@ async function main() {
   await prisma.removal.deleteMany();
   await prisma.alertLog.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.brand.deleteMany(); // safe now that products (the FK holders) are gone
 
-  // Insert all products
+  // ─── Brands ─────────────────────────────────────────────────────────
+  // Promote distinct, normalized brand values into the Brand table, then
+  // link each product's brandId. Uses the same normalizer as the live
+  // create path and the backfill, so dev parity matches production.
+  const brandIdByName = new Map<string, number>();
+  for (const p of products) {
+    const norm = normalizeBrandName(p.brandText);
+    if (norm && !brandIdByName.has(norm)) {
+      const created = await prisma.brand.create({ data: { name: norm } });
+      brandIdByName.set(norm, created.id);
+    }
+  }
+  console.log(`Created ${brandIdByName.size} distinct brands.`);
+
+  // Insert all products, linking brandId via the normalized name
+  const productData = products.map((p) => {
+    const norm = normalizeBrandName(p.brandText);
+    return { ...p, brandId: norm ? (brandIdByName.get(norm) ?? null) : null };
+  });
   const result = await prisma.product.createMany({
-    data: products,
+    data: productData,
   });
 
   console.log(`Inserted ${result.count} products successfully.`);

@@ -1,0 +1,8 @@
+{
+  "_comment": "Human-approved brand dedupe map for backfill-brands.ts. Build this from the dry-run audit output. `canonical` maps a LOWERCASED raw brandText value to the exact canonical Brand name to use (overrides the default title-case normalizer). `dropToNull` lists LOWERCASED raw values that mean 'no brand' and should leave brandId null.",
+  "canonical": {
+    "albanese direct": "Albanese",
+    "albanese confectionery": "Albanese"
+  },
+  "dropToNull": ["n/a", "na", "none", "unknown", "-", "tbd"]
+}

@@ -40,6 +40,7 @@ beforeEach(() => {
   mockPrisma.receipt.findMany.mockResolvedValue([]);
   mockPrisma.receipt.count.mockResolvedValue(0);
   mockPrisma.teamMember.findMany.mockResolvedValue([]);
+  mockPrisma.brand.findMany.mockResolvedValue([]);
   mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
 });
 
@@ -103,6 +104,46 @@ describe("products endpoints", () => {
       .patch("/api/v1/products/1")
       .set(auth(teamToken))
       .send({ alertThreshold: 5 });
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /products rejects unauthenticated requests", async () => {
+    const res = await request(app)
+      .post("/api/v1/products")
+      .send({ name: "X", category: "Gummy", purchaseUnit: "Bag" });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /products rejects team member tokens (admin only)", async () => {
+    const res = await request(app)
+      .post("/api/v1/products")
+      .set(auth(teamToken))
+      .send({ name: "X", category: "Gummy", purchaseUnit: "Bag" });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("brands endpoints", () => {
+  it("GET /brands allows team member tokens (requireAnyAuth)", async () => {
+    const res = await request(app).get("/api/v1/brands").set(auth(teamToken));
+    expect(res.status).toBe(200);
+  });
+
+  it("GET /brands rejects unauthenticated requests", async () => {
+    const res = await request(app).get("/api/v1/brands");
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /brands rejects team member tokens (admin only)", async () => {
+    const res = await request(app).post("/api/v1/brands").set(auth(teamToken)).send({ name: "X" });
+    expect(res.status).toBe(403);
+  });
+
+  it("PATCH /brands/:id rejects team member tokens (admin only)", async () => {
+    const res = await request(app)
+      .patch("/api/v1/brands/1")
+      .set(auth(teamToken))
+      .send({ active: false });
     expect(res.status).toBe(403);
   });
 });

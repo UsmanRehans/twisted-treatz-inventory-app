@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchAdminProducts,
   fetchAdminCategories,
+  fetchBrands,
   updateProduct,
 } from "../../api/adminClient";
-import type { AdminProduct } from "../../api/adminClient";
+import type { AdminProduct, Brand } from "../../api/adminClient";
+import AddProductModal from "./AddProductModal";
 
 interface ProductTableProps {
   token: string;
@@ -38,23 +40,32 @@ function getStatusBadge(product: AdminProduct) {
 export default function ProductTable({ token }: ProductTableProps) {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
+  const [brandId, setBrandId] = useState<string>("All");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadProducts = useCallback(() => {
     setLoading(true);
-    fetchAdminProducts(token, { category, search, sort: sortField, order: sortOrder })
+    fetchAdminProducts(token, {
+      category,
+      brandId: brandId !== "All" ? Number(brandId) : undefined,
+      search,
+      sort: sortField,
+      order: sortOrder,
+    })
       .then(setProducts)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [token, category, search, sortField, sortOrder]);
+  }, [token, category, brandId, search, sortField, sortOrder]);
 
   useEffect(() => {
     loadProducts();
@@ -63,6 +74,14 @@ export default function ProductTable({ token }: ProductTableProps) {
   useEffect(() => {
     fetchAdminCategories(token).then(setCategories).catch(console.error);
   }, [token]);
+
+  const loadBrands = useCallback(() => {
+    fetchBrands(token).then(setBrands).catch(console.error);
+  }, [token]);
+
+  useEffect(() => {
+    loadBrands();
+  }, [loadBrands]);
 
   useEffect(() => {
     if (editingId !== null && inputRef.current) {
@@ -122,7 +141,7 @@ export default function ProductTable({ token }: ProductTableProps) {
   // Reset to page 1 on filter changes
   useEffect(() => {
     setPage(1);
-  }, [search, category, sortField, sortOrder]);
+  }, [search, category, brandId, sortField, sortOrder]);
 
   return (
     <div>
@@ -147,7 +166,36 @@ export default function ProductTable({ token }: ProductTableProps) {
             </option>
           ))}
         </select>
+        <select
+          value={brandId}
+          onChange={(e) => setBrandId(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+        >
+          <option value="All">All Brands</option>
+          {brands.map((b) => (
+            <option key={b.id} value={String(b.id)}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 whitespace-nowrap"
+        >
+          + Add Product
+        </button>
       </div>
+
+      {showAddModal && (
+        <AddProductModal
+          token={token}
+          categories={categories}
+          brands={brands}
+          onClose={() => setShowAddModal(false)}
+          onCreated={loadProducts}
+          onBrandCreated={loadBrands}
+        />
+      )}
 
       {/* Table */}
       {loading ? (
@@ -169,6 +217,9 @@ export default function ProductTable({ token }: ProductTableProps) {
                     onClick={() => handleSort("category")}
                   >
                     Category{sortIndicator("category")}
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    Brand
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">
                     Unit
@@ -198,6 +249,9 @@ export default function ProductTable({ token }: ProductTableProps) {
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {product.category}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-600">
+                      {product.brand ?? <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {product.purchaseUnit}

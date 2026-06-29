@@ -14,7 +14,11 @@ model Product {
   flavor         String?
   purchaseUnit   String // "Bag", "Box", "Gallon", "Bucket" etc
   unitSize       String? // "5 lb", "128 oz" etc
-  brand          String?
+  // Transitional: the original free-text brand column, renamed from `brand`.
+  // Source for the one-time brand backfill; dropped once brandId is populated.
+  brandText      String?
+  brandId        Int?
+  brand          Brand?    @relation(fields: [brandId], references: [id])
   supplier       String?
   usedIn         String? // which finished candy product it goes into
   currentQty     Int       @default(0)
@@ -26,6 +30,20 @@ model Product {
   removals       Removal[]
   receipts       Receipt[]
   adjustments    Adjustment[]
+
+  @@index([brandId])
+}
+
+// First-class brand entity. Promoted from the free-text Product.brand column
+// (now Product.brandText, transitional). Soft-deleted via `active` — there is
+// no hard DELETE, so the FK uses ON DELETE SET NULL as a safety net only.
+model Brand {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique // stored normalized/title-cased
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
 }
 
 model TeamMember {
