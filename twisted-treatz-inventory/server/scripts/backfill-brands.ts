@@ -101,14 +101,19 @@ async function main() {
     brandIdByName.set(name, brand.id);
   }
 
-  // 5. Link products in one transaction (all-or-nothing).
-  await prisma.$transaction(async (tx) => {
-    for (const p of withBrandText) {
-      const canon = canonicalForRaw.get(p.brandText as string) ?? null;
-      const brandId = canon === null ? null : (brandIdByName.get(canon) ?? null);
-      await tx.product.update({ where: { id: p.id }, data: { brandId } });
-    }
-  });
+  // 5. Link products in one transaction (all-or-nothing). Generous timeout:
+  //    sequential updates over a remote connection blow past Prisma's 5s
+  //    interactive-transaction default (P2028).
+  await prisma.$transaction(
+    async (tx) => {
+      for (const p of withBrandText) {
+        const canon = canonicalForRaw.get(p.brandText as string) ?? null;
+        const brandId = canon === null ? null : (brandIdByName.get(canon) ?? null);
+        await tx.product.update({ where: { id: p.id }, data: { brandId } });
+      }
+    },
+    { timeout: 120_000, maxWait: 30_000 }
+  );
 
   // 6. Verify: no row with a MEANINGFUL brandText should be left unlinked.
   //    The DB count below catches every null-brandId row that still has a
