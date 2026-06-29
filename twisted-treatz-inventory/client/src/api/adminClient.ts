@@ -512,6 +512,18 @@ export interface CatalogImportResult {
   summary: CatalogImportSummary;
 }
 
+// Pre-filled import template: every active product in the exact columns the
+// importer reads back (Item, Category, Qty, Pack Size, UOM, Brand). Edit in
+// place and re-upload — untouched rows come back as "unchanged".
+export async function exportCatalogCsv(
+  token: string
+): Promise<{ csv: string; productCount: number; exportedAt: string }> {
+  return adminFetch<{ csv: string; productCount: number; exportedAt: string }>(
+    "/api/v1/catalog/export",
+    token
+  );
+}
+
 export async function importCatalog(
   token: string,
   rows: CatalogImportRow[],
