@@ -14,8 +14,9 @@ import ProductGrid from "../components/floor/ProductGrid";
 import ConfirmBar from "../components/floor/ConfirmBar";
 import SuccessAnimation from "../components/floor/SuccessAnimation";
 import ActivityFeed from "../components/floor/ActivityFeed";
+import FloorStockHealth from "../components/floor/FloorStockHealth";
 
-type Step = "member" | "pin" | "browse" | "activity" | "success";
+type Step = "member" | "pin" | "browse" | "activity" | "stock" | "success";
 
 const IDLE_TIMEOUT = 30_000;
 const COUNTDOWN_START = 20_000;
@@ -272,6 +273,7 @@ export default function FloorApp() {
               onSelectProduct={handleProductSelect}
               onLogout={resetToStart}
               onActivity={() => { setStep("activity"); resetIdle(); }}
+              onStock={() => { setStep("stock"); resetIdle(); }}
               memberName={selectedMember?.name ?? ""}
               loading={productsLoading}
             />
@@ -283,6 +285,13 @@ export default function FloorApp() {
 
         {step === "activity" && authToken && (
           <ActivityFeed
+            token={authToken}
+            onBack={() => { setStep("browse"); resetIdle(); }}
+          />
+        )}
+
+        {step === "stock" && authToken && (
+          <FloorStockHealth
             token={authToken}
             onBack={() => { setStep("browse"); resetIdle(); }}
           />

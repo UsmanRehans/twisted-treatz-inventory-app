@@ -7,6 +7,7 @@ import AdminSidebar, {
 } from "../components/admin/AdminSidebar";
 import StatCards from "../components/admin/StatCards";
 import ProductTable from "../components/admin/ProductTable";
+import StockHealth from "../components/admin/StockHealth";
 import TeamMemberCards from "../components/admin/TeamMemberCards";
 import ActivityLog from "../components/admin/ActivityLog";
 import BulkUpdate from "../components/admin/BulkUpdate";
@@ -48,6 +49,7 @@ export default function Admin() {
 
           {activeTab === "overview" && <StatCards token={token} />}
           {activeTab === "products" && <ProductTable token={token} />}
+          {activeTab === "stock" && <StockHealth token={token} />}
           {activeTab === "team" && <TeamMemberCards token={token} />}
           {activeTab === "activity" && <ActivityLog token={token} />}
           {activeTab === "bulk" && <BulkUpdate token={token} />}
