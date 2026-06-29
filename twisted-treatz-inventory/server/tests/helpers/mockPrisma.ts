@@ -10,8 +10,15 @@ export function createMockPrisma() {
     product: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      create: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
+    },
+    brand: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
     teamMember: {
       findUnique: vi.fn(),

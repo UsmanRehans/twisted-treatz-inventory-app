@@ -6,6 +6,37 @@ import { requireAnyAuth, AuthedRequest } from "../middleware/requireAnyAuth.js";
 
 const router = Router();
 
+// ─── Shared product shape ───────────────────────────────────────────
+// Brand is a relation now, but the wire contract keeps `brand` as a flat
+// string (the brand name) so the existing client (Receiving search,
+// ProductTable) needs no rewrite, plus `brandId` for filtering/editing.
+const productSelect = {
+  id: true,
+  name: true,
+  category: true,
+  flavor: true,
+  purchaseUnit: true,
+  unitSize: true,
+  brandId: true,
+  brand: { select: { id: true, name: true } },
+  supplier: true,
+  usedIn: true,
+  currentQty: true,
+  alertThreshold: true,
+  unitPrice: true,
+  active: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.ProductSelect;
+
+type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect }>;
+
+// Flatten the brand relation to a name string for the response.
+function shapeProduct(p: ProductRow) {
+  const { brand, ...rest } = p;
+  return { ...rest, brand: brand?.name ?? null };
+}
+
 // ─── GET /api/v1/products/categories ───────────────────────────────
 // Any authenticated user — iPad fetches this after PIN verification.
 // Must be defined BEFORE /:id to avoid route conflict
@@ -36,16 +67,20 @@ router.get("/categories", requireAnyAuth, async (_req: AuthedRequest, res: Respo
 
 // ─── GET /api/v1/products ──────────────────────────────────────────
 // Any authenticated user — iPad fetches this after PIN verification.
-// Query params: ?category=Gummy&search=bear&sort=name&order=asc
+// Query params: ?category=Gummy&brandId=3&search=bear&sort=name&order=asc
 router.get("/", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
   try {
-    const { category, search, sort, order } = req.query;
+    const { category, brandId, search, sort, order } = req.query;
 
     // Build where clause
     const where: Prisma.ProductWhereInput = { active: true };
 
     if (category && typeof category === "string") {
       where.category = category;
+    }
+
+    if (brandId && typeof brandId === "string" && !isNaN(Number(brandId))) {
+      where.brandId = Number(brandId);
     }
 
     if (search && typeof search === "string") {
@@ -61,32 +96,112 @@ router.get("/", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
 
     const products = await prisma.product.findMany({
       where,
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        flavor: true,
-        purchaseUnit: true,
-        unitSize: true,
-        brand: true,
-        supplier: true,
-        usedIn: true,
-        currentQty: true,
-        alertThreshold: true,
-        unitPrice: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: productSelect,
       orderBy: { [sortField]: sortOrder },
     });
 
     res.json({
       success: true,
-      data: products,
+      data: products.map(shapeProduct),
     });
   } catch (err) {
     console.error("Products fetch error:", err);
+    res.status(500).json({
+      success: false,
+      data: null,
+      error: "Internal server error",
+    });
+  }
+});
+
+// ─── POST /api/v1/products ─────────────────────────────────────────
+// Admin only — create a brand-new SKU.
+// INVARIANT: a new product is created with currentQty:0, ALWAYS. Creating
+// a product is not a backdoor to inject stock without an audit record —
+// stock arrives only via Receipts. currentQty is never read from the body.
+router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
+  try {
+    const {
+      name,
+      category,
+      flavor,
+      purchaseUnit,
+      unitSize,
+      brandId,
+      supplier,
+      usedIn,
+      alertThreshold,
+      unitPrice,
+    } = req.body;
+
+    // Required fields
+    if (!name || typeof name !== "string" || !name.trim()) {
+      res.status(400).json({ success: false, data: null, error: "name is required" });
+      return;
+    }
+    if (!category || typeof category !== "string" || !category.trim()) {
+      res.status(400).json({ success: false, data: null, error: "category is required" });
+      return;
+    }
+    if (!purchaseUnit || typeof purchaseUnit !== "string" || !purchaseUnit.trim()) {
+      res.status(400).json({ success: false, data: null, error: "purchaseUnit is required" });
+      return;
+    }
+
+    // Optional brandId: if present, must reference an existing brand
+    if (brandId !== undefined && brandId !== null) {
+      if (!Number.isInteger(brandId)) {
+        res.status(400).json({ success: false, data: null, error: "brandId must be an integer" });
+        return;
+      }
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { id: true },
+      });
+      if (!brand) {
+        res.status(400).json({ success: false, data: null, error: "brand not found" });
+        return;
+      }
+    }
+
+    // alertThreshold: optional, defaults to 10, must be non-negative
+    let threshold = 10;
+    if (alertThreshold !== undefined && alertThreshold !== null) {
+      threshold = Number(alertThreshold);
+      if (isNaN(threshold) || threshold < 0) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: "alertThreshold must be a non-negative number",
+        });
+        return;
+      }
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        name: name.trim(),
+        category: category.trim(),
+        flavor: flavor ?? null,
+        purchaseUnit: purchaseUnit.trim(),
+        unitSize: unitSize ?? null,
+        brandId: brandId ?? null,
+        supplier: supplier ?? null,
+        usedIn: usedIn ?? null,
+        currentQty: 0, // ← hard-coded. Never from req.body. See invariant above.
+        alertThreshold: threshold,
+        unitPrice:
+          unitPrice !== undefined && unitPrice !== null
+            ? new Prisma.Decimal(unitPrice as string | number)
+            : null,
+        active: true,
+      },
+      select: productSelect,
+    });
+
+    res.status(201).json({ success: true, data: shapeProduct(product) });
+  } catch (err) {
+    console.error("Product create error:", err);
     res.status(500).json({
       success: false,
       data: null,
@@ -112,23 +227,7 @@ router.get("/:id", requireAnyAuth, async (req: AuthedRequest, res: Response) => 
 
     const product = await prisma.product.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        flavor: true,
-        purchaseUnit: true,
-        unitSize: true,
-        brand: true,
-        supplier: true,
-        usedIn: true,
-        currentQty: true,
-        alertThreshold: true,
-        unitPrice: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: productSelect,
     });
 
     if (!product) {
@@ -142,7 +241,7 @@ router.get("/:id", requireAnyAuth, async (req: AuthedRequest, res: Response) => 
 
     res.json({
       success: true,
-      data: product,
+      data: shapeProduct(product),
     });
   } catch (err) {
     console.error("Product fetch error:", err);
@@ -155,7 +254,7 @@ router.get("/:id", requireAnyAuth, async (req: AuthedRequest, res: Response) => 
 });
 
 // ─── PATCH /api/v1/products/:id ────────────────────────────────────
-// Admin only — update product fields (threshold editing, etc.)
+// Admin only — update product fields (threshold editing, brand reassign, etc.)
 router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
   try {
     const id = Number(req.params.id);
@@ -169,8 +268,9 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       return;
     }
 
-    // Only allow specific fields to be updated
-    const allowedFields = ["alertThreshold", "name", "category", "active", "unitPrice"];
+    // Only allow specific fields to be updated. currentQty is deliberately
+    // NOT here — stock only moves through Removals/Receipts/Adjustments.
+    const allowedFields = ["alertThreshold", "name", "category", "active", "unitPrice", "brandId"];
     const updateData: Record<string, unknown> = {};
 
     for (const field of allowedFields) {
@@ -183,7 +283,7 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       res.status(400).json({
         success: false,
         data: null,
-        error: "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice",
+        error: "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId",
       });
       return;
     }
@@ -202,6 +302,23 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       updateData.alertThreshold = threshold;
     }
 
+    // Validate brandId if provided. null clears the brand; an integer must
+    // reference an existing brand.
+    if (updateData.brandId !== undefined && updateData.brandId !== null) {
+      if (!Number.isInteger(updateData.brandId)) {
+        res.status(400).json({ success: false, data: null, error: "brandId must be an integer" });
+        return;
+      }
+      const brand = await prisma.brand.findUnique({
+        where: { id: updateData.brandId as number },
+        select: { id: true },
+      });
+      if (!brand) {
+        res.status(400).json({ success: false, data: null, error: "brand not found" });
+        return;
+      }
+    }
+
     // Convert unitPrice to Decimal if provided
     if (updateData.unitPrice !== undefined && updateData.unitPrice !== null) {
       updateData.unitPrice = new Prisma.Decimal(updateData.unitPrice as string | number);
@@ -210,28 +327,12 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
     const product = await prisma.product.update({
       where: { id },
       data: updateData,
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        flavor: true,
-        purchaseUnit: true,
-        unitSize: true,
-        brand: true,
-        supplier: true,
-        usedIn: true,
-        currentQty: true,
-        alertThreshold: true,
-        unitPrice: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: productSelect,
     });
 
     res.json({
       success: true,
-      data: product,
+      data: shapeProduct(product),
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {

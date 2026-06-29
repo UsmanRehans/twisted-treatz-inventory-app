@@ -33,6 +33,7 @@ export interface AdminProduct {
   purchaseUnit: string;
   unitSize: string | null;
   brand: string | null;
+  brandId: number | null;
   supplier: string | null;
   usedIn: string | null;
   currentQty: number;
@@ -186,11 +187,14 @@ export async function fetchAdminStats(token: string): Promise<AdminStats> {
 
 export async function fetchAdminProducts(
   token: string,
-  filters?: { category?: string; search?: string; sort?: string; order?: string }
+  filters?: { category?: string; brandId?: number; search?: string; sort?: string; order?: string }
 ): Promise<AdminProduct[]> {
   const params = new URLSearchParams();
   if (filters?.category && filters.category !== "All") {
     params.set("category", filters.category);
+  }
+  if (filters?.brandId) {
+    params.set("brandId", String(filters.brandId));
   }
   if (filters?.search) {
     params.set("search", filters.search);
@@ -219,10 +223,52 @@ export async function updateProduct(
   });
 }
 
+export interface CreateProductData {
+  name: string;
+  category: string;
+  purchaseUnit: string;
+  flavor?: string | null;
+  unitSize?: string | null;
+  brandId?: number | null;
+  supplier?: string | null;
+  usedIn?: string | null;
+  alertThreshold?: number;
+  unitPrice?: number | null;
+}
+
+export async function createProduct(
+  token: string,
+  data: CreateProductData
+): Promise<AdminProduct> {
+  return adminFetch<AdminProduct>("/api/v1/products", token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── Categories ────────────────────────────────────────────────────
 
 export async function fetchAdminCategories(token: string): Promise<string[]> {
   return adminFetch<string[]>("/api/v1/products/categories", token);
+}
+
+// ─── Brands ────────────────────────────────────────────────────────
+
+export interface Brand {
+  id: number;
+  name: string;
+  active: boolean;
+}
+
+export async function fetchBrands(token: string): Promise<Brand[]> {
+  return adminFetch<Brand[]>("/api/v1/brands", token);
+}
+
+export async function createBrand(token: string, name: string): Promise<Brand> {
+  return adminFetch<Brand>("/api/v1/brands", token, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
 }
 
 // ─── Team Members ──────────────────────────────────────────────────
