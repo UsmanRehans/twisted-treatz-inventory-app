@@ -11,6 +11,7 @@ import StockHealth from "../components/admin/StockHealth";
 import TeamMemberCards from "../components/admin/TeamMemberCards";
 import ActivityLog from "../components/admin/ActivityLog";
 import BulkUpdate from "../components/admin/BulkUpdate";
+import ThresholdUpdate from "../components/admin/ThresholdUpdate";
 // Lazy — pulls in the heavy SheetJS parser only when the admin opens this
 // tab, keeping it out of the main bundle the iPad floor app downloads.
 const CatalogImport = lazy(() => import("../components/admin/CatalogImport"));
@@ -53,6 +54,7 @@ export default function Admin() {
           {activeTab === "team" && <TeamMemberCards token={token} />}
           {activeTab === "activity" && <ActivityLog token={token} />}
           {activeTab === "bulk" && <BulkUpdate token={token} />}
+          {activeTab === "thresholds" && <ThresholdUpdate token={token} />}
           {activeTab === "catalog" && (
             <Suspense fallback={<div className="text-sm text-gray-500">Loading…</div>}>
               <CatalogImport token={token} />

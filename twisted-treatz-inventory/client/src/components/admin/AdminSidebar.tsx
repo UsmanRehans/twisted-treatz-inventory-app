@@ -17,6 +17,7 @@ export type AdminTab =
   | "receiving"
   | "bulk"
   | "catalog"
+  | "thresholds"
   | "settings";
 
 export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
@@ -28,6 +29,7 @@ export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
   { id: "receiving", label: "Receiving", icon: "[+]" },
   { id: "bulk", label: "Bulk Update", icon: "[~]" },
   { id: "catalog", label: "Import Catalog", icon: "[^]" },
+  { id: "thresholds", label: "Thresholds", icon: "[%]" },
 ];
 
 export default function AdminSidebar({

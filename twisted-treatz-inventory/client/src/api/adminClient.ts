@@ -436,6 +436,67 @@ export async function importAdjustments(
   });
 }
 
+// ─── Thresholds (CSV export / import) ─────────────────────────────
+// Bulk-maintain each product's low-stock alert threshold. Round-trips like
+// Bulk Update but on the alertThreshold field: download → edit new_threshold →
+// re-upload → preview → apply. Config change only — no audit row, no emails.
+
+export interface ThresholdImportRow {
+  id: number;
+  newThreshold: number;
+}
+
+export interface ThresholdAppliedRow {
+  id: number;
+  name: string;
+  thresholdBefore: number;
+  thresholdAfter: number;
+  currentQty: number;
+  belowThreshold: boolean;
+}
+
+export interface ThresholdSkippedRow {
+  row: number;
+  id: number | null;
+  reason: string;
+}
+
+export interface ThresholdImportSummary {
+  changes: number;
+  unchanged: number;
+  raised: number;
+  lowered: number;
+  belowThreshold: number;
+  errors: number;
+}
+
+export interface ThresholdImportResult {
+  dryRun: boolean;
+  applied: ThresholdAppliedRow[];
+  skipped: ThresholdSkippedRow[];
+  summary: ThresholdImportSummary;
+}
+
+export async function exportThresholdsCsv(
+  token: string
+): Promise<{ csv: string; productCount: number; exportedAt: string }> {
+  return adminFetch<{ csv: string; productCount: number; exportedAt: string }>(
+    "/api/v1/thresholds/export",
+    token
+  );
+}
+
+export async function importThresholds(
+  token: string,
+  rows: ThresholdImportRow[],
+  dryRun: boolean
+): Promise<ThresholdImportResult> {
+  return adminFetch<ThresholdImportResult>("/api/v1/thresholds/import", token, {
+    method: "POST",
+    body: JSON.stringify({ rows, dryRun }),
+  });
+}
+
 // ─── Catalog import (Hani's master sheet) ─────────────────────────
 // Ingests Item/Category/Qty/Pack Size/UOM/Brand rows: creates products we
 // don't have, updates catalog fields on the ones we do, and routes the
