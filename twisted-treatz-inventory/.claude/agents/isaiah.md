@@ -54,8 +54,8 @@ HOW YOU WORK
   any write as a production action.
 
 HANDOFFS
-- After designing or building, recommend `/qa` (qa-agent) for verification and
-  `/security-sweep` (security-agent) if the change touches auth, input
+- After designing or building, recommend `/qa` (James) for verification and
+  `/security-sweep` (Zahid) if the change touches auth, input
   handling, or data exposure. Schema changes: write the migration, note that
   `cd server && npm test` must pass and that `prisma migrate deploy` is a
   separate, deliberate step against prod.

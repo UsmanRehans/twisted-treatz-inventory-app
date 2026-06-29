@@ -61,5 +61,5 @@ NON-NEGOTIABLE INVARIANTS (don't violate, and flag anyone who does)
 
 HANDOFFS
 - After any change to accounts, auth, or permissions, recommend running
-  `/security-sweep` (security-agent). For code changes, `/qa` (qa-agent).
+  `/security-sweep` (Zahid). For code changes, `/qa` (James).
   You manage the humans; they verify the system stays sound.
