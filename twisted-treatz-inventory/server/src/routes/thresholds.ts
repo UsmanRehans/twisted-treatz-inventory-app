@@ -189,6 +189,10 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
           unchanged,
           raised: changes.filter((c) => c.thresholdAfter > c.thresholdBefore).length,
           lowered: changes.filter((c) => c.thresholdAfter < c.thresholdBefore).length,
+          // Setting a threshold to 0 disables low-stock alerts for that item —
+          // the one quasi-destructive act here, so the client gates a bulk
+          // disable behind a typed confirm (mirrors Bulk Update's zero guard).
+          zeroed: changes.filter((c) => c.thresholdAfter === 0).length,
           belowThreshold: changes.filter((c) => c.belowThreshold).length,
           errors: skipped.length,
         },
