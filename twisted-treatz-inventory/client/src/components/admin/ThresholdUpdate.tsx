@@ -11,6 +11,11 @@ interface ThresholdUpdateProps {
   token: string;
 }
 
+// Setting a threshold to 0 turns off low-stock alerts for that item. Disabling
+// alerts for this many products at once requires a typed confirm — a backstop
+// against re-importing a stale/blank file (mirrors Bulk Update's zero guard).
+const ZERO_CONFIRM_THRESHOLD = 20;
+
 type Stage = "idle" | "preview" | "done";
 
 export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
@@ -21,6 +26,7 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
   const [rows, setRows] = useState<ThresholdImportRow[]>([]);
   const [preview, setPreview] = useState<ThresholdImportResult | null>(null);
   const [result, setResult] = useState<ThresholdImportResult | null>(null);
+  const [zeroConfirm, setZeroConfirm] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function resetToIdle() {
@@ -30,6 +36,7 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
     setResult(null);
     setFileName("");
     setError(null);
+    setZeroConfirm("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -89,6 +96,7 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
       const dry = await importThresholds(token, parsed, true);
       setPreview(dry);
       setStage("preview");
+      setZeroConfirm("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read file");
       setFileName("");
@@ -113,6 +121,9 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
   }
 
   const noChanges = (preview?.summary.changes ?? 0) === 0;
+  const zeroed = preview?.summary.zeroed ?? 0;
+  const needsZeroConfirm = zeroed >= ZERO_CONFIRM_THRESHOLD;
+  const zeroConfirmed = !needsZeroConfirm || zeroConfirm.trim().toUpperCase() === "OFF";
 
   return (
     <div className="max-w-4xl">
@@ -199,6 +210,7 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
             {preview.summary.lowered > 0 && (
               <Chip label={`${preview.summary.lowered} lowered`} tone="amber" />
             )}
+            {zeroed > 0 && <Chip label={`${zeroed} alerts off (set to 0)`} tone="red" />}
             {preview.summary.unchanged > 0 && (
               <Chip label={`${preview.summary.unchanged} unchanged`} tone="gray" />
             )}
@@ -269,11 +281,29 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
             </div>
           )}
 
+          {/* Bulk alerts-off guard */}
+          {needsZeroConfirm && (
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700 mb-2">
+                This sets <strong>{zeroed} products to a 0 threshold</strong>, which
+                turns off their low-stock alerts. If that's intended, type{" "}
+                <span className="font-mono font-bold">OFF</span> to confirm.
+              </p>
+              <input
+                type="text"
+                value={zeroConfirm}
+                onChange={(e) => setZeroConfirm(e.target.value)}
+                placeholder="Type OFF"
+                className="px-3 py-2 border border-red-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 text-gray-900"
+              />
+            </div>
+          )}
+
           {/* Apply */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleApply}
-              disabled={busy || noChanges}
+              disabled={busy || noChanges || !zeroConfirmed}
               className="px-5 py-2.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {busy

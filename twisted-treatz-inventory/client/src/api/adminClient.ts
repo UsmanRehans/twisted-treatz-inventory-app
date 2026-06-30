@@ -466,6 +466,7 @@ export interface ThresholdImportSummary {
   unchanged: number;
   raised: number;
   lowered: number;
+  zeroed: number; // thresholds set to 0 → low-stock alerts disabled
   belowThreshold: number;
   errors: number;
 }

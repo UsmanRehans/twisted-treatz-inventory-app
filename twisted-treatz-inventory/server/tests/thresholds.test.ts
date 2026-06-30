@@ -140,6 +140,13 @@ describe("POST /api/v1/thresholds/import — apply", () => {
     expect(mockPrisma.product.update).not.toHaveBeenCalled();
     expect(res.body.data.summary.changes).toBe(1);
   });
+
+  it("counts thresholds set to 0 as zeroed (drives the alerts-off confirm)", async () => {
+    // id 7 threshold 10 → 0 (alerts off); id 8 threshold 10 → 5 (still on)
+    const res = await importRows({ rows: [{ id: 7, newThreshold: 0 }, { id: 8, newThreshold: 5 }] });
+    expect(res.body.data.summary.zeroed).toBe(1);
+    expect(res.body.data.summary).toMatchObject({ changes: 2, lowered: 2 });
+  });
 });
 
 // ─── Import: validation & partial failure ───────────────────────
@@ -180,5 +187,92 @@ describe("POST /api/v1/thresholds/import — validation", () => {
   it("rejects an empty rows array", async () => {
     const res = await importRows({ rows: [] });
     expect(res.status).toBe(400);
+  });
+
+  // ─── Adversarial edge cases (QA additions) ────────────────────
+  it("rejects a non-array rows body", async () => {
+    const res = await importRows({ rows: "not-an-array" });
+    expect(res.status).toBe(400);
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing rows body", async () => {
+    const res = await importRows({});
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects more than MAX_ROWS (1000) rows up front", async () => {
+    const rows = Array.from({ length: 1001 }, (_, i) => ({ id: i + 1, newThreshold: 5 }));
+    const res = await importRows({ rows });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Too many rows/);
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+
+  it("skips a duplicate id (second occurrence) and applies the first", async () => {
+    const res = await importRows({
+      rows: [
+        { id: 7, newThreshold: 20 },
+        { id: 7, newThreshold: 30 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    // Only the first occurrence is applied; the second is a duplicate skip.
+    expect(mockPrisma.product.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { alertThreshold: 20 } }),
+    );
+    expect(res.body.data.summary).toMatchObject({ changes: 1, errors: 1 });
+    expect(res.body.data.skipped[0]).toMatchObject({ id: 7, reason: "duplicate row for this product" });
+  });
+
+  it("rejects id <= 0 (non-positive integer)", async () => {
+    const res = await importRows({ rows: [{ id: 0, newThreshold: 5 }, { id: -3, newThreshold: 5 }] });
+    expect(res.body.data.summary).toMatchObject({ changes: 0, errors: 2 });
+    expect(res.body.data.skipped[0]).toMatchObject({ reason: "id must be a positive integer" });
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-integer (float) id", async () => {
+    const res = await importRows({ rows: [{ id: 7.5, newThreshold: 5 }] });
+    expect(res.body.data.summary).toMatchObject({ changes: 0, errors: 1 });
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a string newThreshold (no coercion server-side)", async () => {
+    const res = await importRows({ rows: [{ id: 7, newThreshold: "20" }] });
+    expect(res.body.data.summary).toMatchObject({ changes: 0, errors: 1 });
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts newThreshold of exactly 0 (alerts effectively off)", async () => {
+    const res = await importRows({ rows: [{ id: 7, newThreshold: 0 }] });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { alertThreshold: 0 } }),
+    );
+    expect(res.body.data.summary).toMatchObject({ changes: 1 });
+  });
+
+  it("accepts the MAX_THRESHOLD boundary (1,000,000) and rejects one above", async () => {
+    const res = await importRows({
+      rows: [
+        { id: 7, newThreshold: 1_000_000 }, // boundary OK
+        { id: 8, newThreshold: 1_000_001 }, // over max
+      ],
+    });
+    expect(res.body.data.summary).toMatchObject({ changes: 1, errors: 1 });
+    expect(mockPrisma.product.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { alertThreshold: 1_000_000 } }),
+    );
+  });
+
+  it("flags at-EXACTLY-threshold as belowThreshold (at-or-below semantics)", async () => {
+    // id 7 has qty 4: threshold 4 → 4 <= 4 → flagged; threshold 3 → 4 <= 3 → not.
+    const atRes = await importRows({ rows: [{ id: 7, newThreshold: 4 }] });
+    expect(atRes.body.data.applied[0].belowThreshold).toBe(true);
+    const belowRes = await importRows({ rows: [{ id: 7, newThreshold: 3 }] });
+    expect(belowRes.body.data.applied[0].belowThreshold).toBe(false);
   });
 });
