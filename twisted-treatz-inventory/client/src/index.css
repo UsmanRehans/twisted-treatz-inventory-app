@@ -1,5 +1,45 @@
 @import "tailwindcss";
 
+/* ── Twisted Treatz design tokens — warm light language ──────────────────
+   See client/DESIGN_TOKENS.md. The whole app styles via Tailwind utility
+   classes (no hardcoded hex in components), so we shift the mood centrally
+   here: remap the neutral (gray) ramp from cool slate to warm paper→charcoal,
+   recolor the accent (indigo) from corporate-cool to a calm warm slate-blue,
+   and relax the corner radii. Existing classes (bg-gray-50, text-gray-900,
+   bg-indigo-600, rounded-lg …) pick these up with no per-component edits.
+   Accessibility: gray-500/600 kept dark enough for AA body text on white;
+   white-on-accent-600 ≈ 4.5:1. */
+@theme {
+  /* Neutral ramp → warm paper-to-charcoal */
+  --color-gray-50: #fbf7f2;
+  --color-gray-100: #f4efe8;
+  --color-gray-200: #ece4da;
+  --color-gray-300: #ddd3c7;
+  --color-gray-400: #b5a99c;
+  --color-gray-500: #756a60;
+  --color-gray-600: #5e544b;
+  --color-gray-700: #4a4138;
+  --color-gray-800: #353029;
+  --color-gray-900: #2a2320;
+
+  /* Accent ramp → calm warm slate-blue (replaces cool indigo) */
+  --color-indigo-50: #eef1fa;
+  --color-indigo-100: #dce3f4;
+  --color-indigo-200: #c3d0ec;
+  --color-indigo-300: #9fb2de;
+  --color-indigo-400: #7b92d0;
+  --color-indigo-500: #6a80c9;
+  --color-indigo-600: #5b73c4;
+  --color-indigo-700: #4a60ac;
+  --color-indigo-800: #3c4e8c;
+  --color-indigo-900: #313f70;
+
+  /* Softer corners — calmer, more premium (no per-component changes) */
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+}
+
 /* Base — full height */
 html, body, #root {
   height: 100%;
