@@ -21,7 +21,22 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ─── Middleware ──────────────────────────────────────────────────────
-app.use(cors());
+// CORS is pinned to the production frontend plus local dev origins.
+// Requests without an Origin header (curl, health checks, the Railway
+// probe) are unaffected — this only gates what browsers will accept.
+// CORS_EXTRA_ORIGINS (comma-separated) can whitelist extra origins,
+// e.g. a Vercel preview URL, without a code change.
+const allowedOrigins = [
+  "https://inventory.twistedtreatz.com",
+  ...(process.env.NODE_ENV !== "production"
+    ? ["http://localhost:5173", "http://localhost:4173"]
+    : []),
+  ...(process.env.CORS_EXTRA_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
+];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // ─── Routes ─────────────────────────────────────────────────────────

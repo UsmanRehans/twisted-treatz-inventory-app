@@ -72,6 +72,8 @@ This is a private tool used exclusively by the owner and 6 team members.
 - Admin password change/reset revokes all outstanding admin JWTs: tokens carry a `tokenVersion` claim checked against `Admin.tokenVersion` on every admin-authed request (tokens minted before the claim count as 0); change-password returns a fresh token so the changing session stays signed in
 - Reset-token consumption is atomic: validate + consume happen in one `updateMany` (no find-then-update race)
 - `JWT_SECRET` must be set in production — the server refuses to boot without it
+- Admin emails must be exactly `@twistedtreatz.com` (no subdomains/lookalikes): any writer of an admin email must call `isAllowedAdminEmail` from `server/src/lib/adminEmailPolicy.ts` (today only the seed script writes one)
+- Browser CORS is pinned: prod frontend origin + localhost in dev (`CORS_EXTRA_ORIGINS` env var for anything else)
 - Alerts fire at-or-below threshold, max once per product per day
 
 ## Testing — run before claiming anything works
