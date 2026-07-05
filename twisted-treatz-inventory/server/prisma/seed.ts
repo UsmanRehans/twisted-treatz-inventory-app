@@ -5,6 +5,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcrypt";
 import { normalizeBrandName } from "../src/lib/brand.js";
+import { isAllowedAdminEmail, ADMIN_EMAIL_DOMAIN } from "../src/lib/adminEmailPolicy.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -176,6 +177,11 @@ async function main() {
   // untouched so re-running seed can never reset a live password.
   console.log("\n--- Seeding admin user ---");
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@twistedtreatz.com";
+  if (!isAllowedAdminEmail(adminEmail)) {
+    throw new Error(
+      `SEED_ADMIN_EMAIL "${adminEmail}" is not allowed — admin accounts must use @${ADMIN_EMAIL_DOMAIN}.`,
+    );
+  }
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 
   const existingAdmin = await prisma.admin.findUnique({ where: { email: adminEmail } });
