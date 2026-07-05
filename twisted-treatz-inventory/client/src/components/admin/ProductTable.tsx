@@ -7,6 +7,7 @@ import {
 } from "../../api/adminClient";
 import type { AdminProduct, Brand } from "../../api/adminClient";
 import AddProductModal from "./AddProductModal";
+import EditProductModal from "./EditProductModal";
 
 interface ProductTableProps {
   token: string;
@@ -16,6 +17,13 @@ type SortField = "name" | "category" | "currentQty";
 type SortOrder = "asc" | "desc";
 
 function getStatusBadge(product: AdminProduct) {
+  if (!product.active) {
+    return (
+      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-gray-200 text-gray-600">
+        Inactive
+      </span>
+    );
+  }
   if (product.currentQty === 0) {
     return (
       <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
@@ -51,6 +59,8 @@ export default function ProductTable({ token }: ProductTableProps) {
   const [editValue, setEditValue] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadProducts = useCallback(() => {
@@ -61,11 +71,12 @@ export default function ProductTable({ token }: ProductTableProps) {
       search,
       sort: sortField,
       order: sortOrder,
+      includeInactive: showInactive,
     })
       .then(setProducts)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [token, category, brandId, search, sortField, sortOrder]);
+  }, [token, category, brandId, search, sortField, sortOrder, showInactive]);
 
   useEffect(() => {
     loadProducts();
@@ -141,7 +152,18 @@ export default function ProductTable({ token }: ProductTableProps) {
   // Reset to page 1 on filter changes
   useEffect(() => {
     setPage(1);
-  }, [search, category, brandId, sortField, sortOrder]);
+  }, [search, category, brandId, sortField, sortOrder, showInactive]);
+
+  function handleSaved(updated: AdminProduct) {
+    if (!updated.active && !showInactive) {
+      // Deactivated while the inactive filter is off — drop it from view.
+      setProducts((prev) => prev.filter((p) => p.id !== updated.id));
+    } else {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === updated.id ? updated : p))
+      );
+    }
+  }
 
   return (
     <div>
@@ -178,6 +200,15 @@ export default function ProductTable({ token }: ProductTableProps) {
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white cursor-pointer whitespace-nowrap select-none">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="accent-indigo-600"
+          />
+          Show inactive
+        </label>
         <button
           onClick={() => setShowAddModal(true)}
           className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 whitespace-nowrap"
@@ -193,6 +224,18 @@ export default function ProductTable({ token }: ProductTableProps) {
           brands={brands}
           onClose={() => setShowAddModal(false)}
           onCreated={loadProducts}
+          onBrandCreated={loadBrands}
+        />
+      )}
+
+      {editingProduct && (
+        <EditProductModal
+          token={token}
+          product={editingProduct}
+          categories={categories}
+          brands={brands}
+          onClose={() => setEditingProduct(null)}
+          onSaved={handleSaved}
           onBrandCreated={loadBrands}
         />
       )}
@@ -236,13 +279,18 @@ export default function ProductTable({ token }: ProductTableProps) {
                   <th className="text-center px-4 py-3 font-medium text-gray-600">
                     Status
                   </th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {paged.map((product) => (
                   <tr
                     key={product.id}
-                    className="hover:bg-gray-50 transition-colors"
+                    className={`hover:bg-gray-50 transition-colors ${
+                      product.active ? "" : "opacity-50 bg-gray-50"
+                    }`}
                   >
                     <td className="px-4 py-2.5 text-gray-900 font-medium">
                       {product.name}
@@ -287,6 +335,35 @@ export default function ProductTable({ token }: ProductTableProps) {
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       {getStatusBadge(product)}
+                    </td>
+                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => setEditingProduct(product)}
+                        className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded text-sm transition-colors"
+                        title="Edit product details"
+                      >
+                        Edit
+                      </button>
+                      {!product.active && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const updated = await updateProduct(
+                                token,
+                                product.id,
+                                { active: true }
+                              );
+                              handleSaved(updated);
+                            } catch (err) {
+                              console.error("Failed to reactivate:", err);
+                            }
+                          }}
+                          className="ml-1 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-sm transition-colors"
+                          title="Reactivate product"
+                        >
+                          Reactivate
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

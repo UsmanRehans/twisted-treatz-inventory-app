@@ -189,11 +189,14 @@ export async function fetchAdminStats(token: string): Promise<AdminStats> {
 
 export async function fetchAdminProducts(
   token: string,
-  filters?: { category?: string; brandId?: number; search?: string; sort?: string; order?: string }
+  filters?: { category?: string; brandId?: number; search?: string; sort?: string; order?: string; includeInactive?: boolean }
 ): Promise<AdminProduct[]> {
   const params = new URLSearchParams();
   if (filters?.category && filters.category !== "All") {
     params.set("category", filters.category);
+  }
+  if (filters?.includeInactive) {
+    params.set("includeInactive", "true");
   }
   if (filters?.brandId) {
     params.set("brandId", String(filters.brandId));
