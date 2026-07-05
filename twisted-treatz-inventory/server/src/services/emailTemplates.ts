@@ -16,6 +16,17 @@ interface RemovalInfo {
 
 const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://twistedtreatz.com";
 
+// Admin-entered strings (product names, categories, member names) must not
+// be interpretable as markup when interpolated into email HTML.
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatDate(date: Date): string {
   return date.toLocaleString("en-US", {
     timeZone: "America/Chicago",
@@ -58,7 +69,7 @@ export function passwordResetEmailHtml(resetLink: string): string {
       </p>
 
       <div style="text-align: center; margin: 24px 0;">
-        <a href="${resetLink}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-size: 14px; font-weight: 600;">
+        <a href="${escapeHtml(resetLink)}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-size: 14px; font-weight: 600;">
           Reset Password
         </a>
       </div>
@@ -97,8 +108,8 @@ export function lowStockEmailHtml(
     .map(
       (p) => `
       <tr>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${p.name}</td>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${p.category}</td>
+        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${escapeHtml(p.name)}</td>
+        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${escapeHtml(p.category)}</td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; text-align: center; color: #dc2626; font-weight: 600;">${p.currentQty}</td>
         <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; text-align: center;">${p.alertThreshold}</td>
       </tr>`,
@@ -148,7 +159,7 @@ export function lowStockEmailHtml(
       <!-- Alert Banner -->
       <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
         <p style="margin: 0; color: #991b1b; font-size: 16px; font-weight: 600;">
-          ${product.name} is running low
+          ${escapeHtml(product.name)} is running low
         </p>
         <p style="margin: 4px 0 0 0; color: #7f1d1d; font-size: 14px;">
           Current stock has dropped to <strong>${product.currentQty}</strong> units (threshold: ${product.alertThreshold})
@@ -159,11 +170,11 @@ export function lowStockEmailHtml(
       <table style="width: 100%; margin-bottom: 24px;">
         <tr>
           <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 140px;">Product:</td>
-          <td style="padding: 6px 0; color: #1f2937; font-size: 14px; font-weight: 600;">${product.name}</td>
+          <td style="padding: 6px 0; color: #1f2937; font-size: 14px; font-weight: 600;">${escapeHtml(product.name)}</td>
         </tr>
         <tr>
           <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Category:</td>
-          <td style="padding: 6px 0; color: #1f2937; font-size: 14px;">${product.category}</td>
+          <td style="padding: 6px 0; color: #1f2937; font-size: 14px;">${escapeHtml(product.category)}</td>
         </tr>
         <tr>
           <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Current Quantity:</td>
@@ -180,13 +191,13 @@ export function lowStockEmailHtml(
       <!-- Removal Info -->
       <p style="color: #6b7280; font-size: 13px; margin: 0 0 4px 0;">Triggered by removal:</p>
       <p style="color: #1f2937; font-size: 14px; margin: 0;">
-        <strong>${removalInfo.memberName}</strong> removed <strong>${removalInfo.qty}</strong> unit${removalInfo.qty > 1 ? "s" : ""} on ${formatDate(removalInfo.removedAt)}
+        <strong>${escapeHtml(removalInfo.memberName)}</strong> removed <strong>${removalInfo.qty}</strong> unit${removalInfo.qty > 1 ? "s" : ""} on ${formatDate(removalInfo.removedAt)}
       </p>
 
       <!-- CTA Button -->
       <div style="text-align: center; margin: 24px 0;">
-        <a href="${receiveLink}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-size: 14px; font-weight: 600;">
-          Receive Stock for ${product.name}
+        <a href="${escapeHtml(receiveLink)}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-size: 14px; font-weight: 600;">
+          Receive Stock for ${escapeHtml(product.name)}
         </a>
       </div>
 
