@@ -71,12 +71,18 @@ router.get("/categories", requireAnyAuth, async (_req: AuthedRequest, res: Respo
 // ─── GET /api/v1/products ──────────────────────────────────────────
 // Any authenticated user — iPad fetches this after PIN verification.
 // Query params: ?category=Gummy&brandId=3&search=bear&sort=name&order=asc
+// Admin tokens may also pass ?includeInactive=true to see deactivated
+// products (for the Show-inactive toggle); the flag is silently ignored
+// for team tokens so the floor iPad can never surface retired SKUs.
 router.get("/", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
   try {
-    const { category, brandId, search, sort, order } = req.query;
+    const { category, brandId, search, sort, order, includeInactive } = req.query;
 
     // Build where clause
-    const where: Prisma.ProductWhereInput = { active: true };
+    const where: Prisma.ProductWhereInput = {};
+    if (includeInactive !== "true" || !req.admin) {
+      where.active = true;
+    }
 
     if (category && typeof category === "string") {
       where.category = category;
@@ -176,6 +182,19 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
       return;
     }
 
+    // unitPrice: optional, must be a non-negative number if present
+    if (unitPrice !== undefined && unitPrice !== null) {
+      const price = Number(unitPrice);
+      if (isNaN(price) || price < 0) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: "unitPrice must be a non-negative number",
+        });
+        return;
+      }
+    }
+
     // alertThreshold: optional, defaults to 10, must be non-negative
     let threshold = 10;
     if (alertThreshold !== undefined && alertThreshold !== null) {
@@ -244,7 +263,10 @@ router.get("/:id", requireAnyAuth, async (req: AuthedRequest, res: Response) => 
       select: productSelect,
     });
 
-    if (!product) {
+    // Inactive products are admin-only, same as the list endpoint — the
+    // floor iPad must never see retired SKUs, even by ID. 404 (not 403)
+    // so a team token can't probe which IDs exist.
+    if (!product || (!product.active && !req.admin)) {
       res.status(404).json({
         success: false,
         data: null,
@@ -293,6 +315,10 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       "brandId",
       "packSize",
       "uom",
+      "purchaseUnit",
+      "flavor",
+      "supplier",
+      "usedIn",
     ];
     const updateData: Record<string, unknown> = {};
 
@@ -307,7 +333,52 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
         success: false,
         data: null,
         error:
-          "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId, packSize, uom",
+          "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId, packSize, uom, purchaseUnit, flavor, supplier, usedIn",
+      });
+      return;
+    }
+
+    // String fields: must be non-empty strings where required by the model
+    // (name, category, purchaseUnit); optional ones (flavor, supplier,
+    // usedIn) accept null to clear. All are trimmed and length-capped.
+    const MAX_STR = 200;
+    const requiredStrings = ["name", "category", "purchaseUnit"] as const;
+    const optionalStrings = ["flavor", "supplier", "usedIn"] as const;
+
+    for (const field of requiredStrings) {
+      const val = updateData[field];
+      if (val === undefined) continue;
+      if (typeof val !== "string" || !val.trim() || val.trim().length > MAX_STR) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: `${field} must be a non-empty string (max ${MAX_STR} chars)`,
+        });
+        return;
+      }
+      updateData[field] = val.trim();
+    }
+
+    for (const field of optionalStrings) {
+      const val = updateData[field];
+      if (val === undefined || val === null) continue;
+      if (typeof val !== "string" || val.trim().length > MAX_STR) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: `${field} must be a string (max ${MAX_STR} chars) or null`,
+        });
+        return;
+      }
+      updateData[field] = val.trim() || null;
+    }
+
+    // active must be a boolean if provided
+    if (updateData.active !== undefined && typeof updateData.active !== "boolean") {
+      res.status(400).json({
+        success: false,
+        data: null,
+        error: "active must be a boolean",
       });
       return;
     }
@@ -358,7 +429,16 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
 
     // Convert unitPrice to Decimal if provided
     if (updateData.unitPrice !== undefined && updateData.unitPrice !== null) {
-      updateData.unitPrice = new Prisma.Decimal(updateData.unitPrice as string | number);
+      const price = Number(updateData.unitPrice);
+      if (isNaN(price) || price < 0) {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: "unitPrice must be a non-negative number",
+        });
+        return;
+      }
+      updateData.unitPrice = new Prisma.Decimal(price);
     }
 
     const product = await prisma.product.update({
