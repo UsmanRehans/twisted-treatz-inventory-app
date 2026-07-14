@@ -16,6 +16,15 @@ interface ProductTableProps {
 type SortField = "name" | "category" | "currentQty";
 type SortOrder = "asc" | "desc";
 
+// Render packSize + uom as a compact label: "18 ct", "30 lb", "26.4 oz".
+// packSize is a Decimal serialized to a string; Number() strips trailing zeros.
+function formatPackSize(product: AdminProduct): string | null {
+  if (product.packSize === null) return null;
+  const size = Number(product.packSize);
+  if (isNaN(size)) return null;
+  return product.uom ? `${size} ${product.uom}` : String(size);
+}
+
 function getStatusBadge(product: AdminProduct) {
   if (!product.active) {
     return (
@@ -267,6 +276,9 @@ export default function ProductTable({ token }: ProductTableProps) {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">
                     Unit
                   </th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">
+                    Pack Size
+                  </th>
                   <th
                     className="text-right px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
                     onClick={() => handleSort("currentQty")}
@@ -303,6 +315,11 @@ export default function ProductTable({ token }: ProductTableProps) {
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {product.purchaseUnit}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-600">
+                      {formatPackSize(product) ?? (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-right text-gray-900 font-mono">
                       {product.currentQty}
