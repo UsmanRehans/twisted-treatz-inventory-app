@@ -190,6 +190,7 @@ export default function FloorApp() {
       }, 2000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to remove inventory");
+    } finally {
       setSubmitting(false);
     }
   };
