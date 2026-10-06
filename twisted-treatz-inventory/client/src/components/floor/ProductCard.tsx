@@ -31,6 +31,12 @@ export default function ProductCard({
         isOutOfStock && !isSelected ? "opacity-60" : ""
       }`}
     >
+      {product.highRisk && (
+        <span className="mb-1.5 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide rounded-full bg-red-600 text-white">
+          High risk
+        </span>
+      )}
+
       {/* Product name */}
       <span
         className={`text-[18px] font-medium leading-tight mb-2 ${
