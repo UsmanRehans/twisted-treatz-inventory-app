@@ -306,6 +306,11 @@ export default function ProductTable({ token }: ProductTableProps) {
                   >
                     <td className="px-4 py-2.5 text-gray-900 font-medium">
                       {product.name}
+                      {product.highRisk && (
+                        <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white align-middle whitespace-nowrap">
+                          High risk
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {product.category}
