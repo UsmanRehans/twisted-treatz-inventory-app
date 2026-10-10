@@ -1,6 +1,8 @@
 // ─── Removal stock math ─────────────────────────────────────────────
 // Stock decrements must be exact, transactional, snapshot before/after,
-// and refuse to go negative.
+// refuse to go negative, and be guarded against concurrent removals: the
+// decrement is a conditional UPDATE (currentQty >= qty) run inside an
+// interactive transaction, never a read-then-write of an absolute value.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
@@ -29,7 +31,9 @@ const gummyBears = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.product.findUnique.mockResolvedValue(gummyBears);
-  mockPrisma.product.update.mockResolvedValue({ ...gummyBears, currentQty: 15 });
+  // Guarded decrement matches the row; it reads back 15 (20 - 5)
+  mockPrisma.product.updateMany.mockResolvedValue({ count: 1 });
+  mockPrisma.product.findUniqueOrThrow.mockResolvedValue({ currentQty: 15 });
   mockPrisma.removal.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ id: 1, createdAt: new Date(), ...data })
   );
@@ -52,25 +56,48 @@ describe("POST /api/v1/removals — stock math", () => {
     expect(res.status).toBe(201);
     expect(res.body.data.removal.qtyBefore).toBe(20);
     expect(res.body.data.removal.qtyAfter).toBe(15);
-    expect(mockPrisma.product.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { currentQty: 15 } })
+    // The decrement is guarded by the LIVE qty and applied by the database
+    expect(mockPrisma.product.updateMany).toHaveBeenCalledWith({
+      where: { id: 42, active: true, currentQty: { gte: 5 } },
+      data: { currentQty: { decrement: 5 } },
+    });
+    // Snapshots come from the row read back inside the same transaction
+    expect(mockPrisma.removal.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ qtyBefore: 20, qtyAfter: 15 }) }),
     );
-    // Stock update and removal log must go through a transaction together
+    // Stock update and removal log run in ONE interactive transaction
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
+    expect(typeof mockPrisma.$transaction.mock.calls[0][0]).toBe("function");
   });
 
   it("refuses to remove more than current stock", async () => {
     const res = await removeQty(21);
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("Insufficient stock");
-    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+    expect(mockPrisma.product.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.removal.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses when a concurrent change leaves too little stock by the time the decrement runs", async () => {
+    // The pre-check saw 20, but the guarded UPDATE matched no row because
+    // another request took the units first; the live qty is now 2.
+    mockPrisma.product.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.product.findUnique
+      .mockResolvedValueOnce(gummyBears)
+      .mockResolvedValueOnce({ ...gummyBears, currentQty: 2 });
+    const res = await removeQty(5);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("Insufficient stock");
+    expect(res.body.error).toContain("Current quantity: 2");
+    expect(mockPrisma.removal.create).not.toHaveBeenCalled();
   });
 
   it("allows removing exactly the remaining stock (down to zero)", async () => {
+    mockPrisma.product.findUniqueOrThrow.mockResolvedValue({ currentQty: 0 });
     const res = await removeQty(20);
     expect(res.status).toBe(201);
     expect(res.body.data.removal.qtyAfter).toBe(0);
+    expect(res.body.data.removal.qtyBefore).toBe(20);
   });
 
   it.each([
@@ -82,7 +109,7 @@ describe("POST /api/v1/removals — stock math", () => {
   ])("rejects %s qty with 400", async (_label, qty) => {
     const res = await removeQty(qty);
     expect(res.status).toBe(400);
-    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+    expect(mockPrisma.product.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects removals from inactive products with 404", async () => {

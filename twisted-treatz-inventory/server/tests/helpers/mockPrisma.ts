@@ -6,12 +6,14 @@
 import { vi } from "vitest";
 
 export function createMockPrisma() {
-  return {
+  const mock = {
     product: {
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
     },
     brand: {
@@ -54,10 +56,16 @@ export function createMockPrisma() {
       create: vi.fn(),
       findFirst: vi.fn(),
     },
-    // Array form: run all queued promises. Routes only use this form.
-    $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    // Array form runs all queued promises; callback form (interactive
+    // transaction) runs the callback with this same mock as the tx client.
+    $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   };
+  mock.$transaction.mockImplementation(
+    (arg: Promise<unknown>[] | ((tx: typeof mock) => Promise<unknown>)) =>
+      typeof arg === "function" ? arg(mock) : Promise.all(arg),
+  );
+  return mock;
 }
 
 export type MockPrisma = ReturnType<typeof createMockPrisma>;

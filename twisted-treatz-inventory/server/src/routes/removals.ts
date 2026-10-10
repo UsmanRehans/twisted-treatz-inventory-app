@@ -50,7 +50,8 @@ router.post("/", requireTeamMember, async (req: TeamMemberRequest, res: Response
       return;
     }
 
-    // Check sufficient stock
+    // Fast-path stock check for a clear message; the authoritative check is
+    // the guarded decrement below.
     if (product.currentQty < qty) {
       res.status(400).json({
         success: false,
@@ -60,25 +61,45 @@ router.post("/", requireTeamMember, async (req: TeamMemberRequest, res: Response
       return;
     }
 
-    const qtyBefore = product.currentQty;
-    const qtyAfter = product.currentQty - qty;
-
-    // Atomic transaction: update product qty + create removal record
-    const [, removal] = await prisma.$transaction([
-      prisma.product.update({
+    // Guarded, atomic decrement. The WHERE clause re-checks the live qty
+    // inside the transaction, so two overlapping removals cannot both take
+    // the same units (a read-then-write let the second silently overwrite
+    // the first). The snapshots come from the row we just updated and the
+    // Removal row is written in the same transaction.
+    const removal = await prisma.$transaction(async (tx) => {
+      const guarded = await tx.product.updateMany({
+        where: { id: productId, active: true, currentQty: { gte: qty } },
+        data: { currentQty: { decrement: qty } },
+      });
+      if (guarded.count === 0) return null;
+      const after = await tx.product.findUniqueOrThrow({
         where: { id: productId },
-        data: { currentQty: qtyAfter },
-      }),
-      prisma.removal.create({
+        select: { currentQty: true },
+      });
+      return tx.removal.create({
         data: {
           productId,
           teamMemberId,
           qty,
-          qtyBefore,
-          qtyAfter,
+          qtyBefore: after.currentQty + qty,
+          qtyAfter: after.currentQty,
         },
-      }),
-    ]);
+      });
+    });
+
+    if (!removal) {
+      // Lost the race to a concurrent removal/receipt: report the live qty
+      const live = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { currentQty: true },
+      });
+      res.status(400).json({
+        success: false,
+        data: null,
+        error: `Insufficient stock. Current quantity: ${live?.currentQty ?? 0}, requested: ${qty}`,
+      });
+      return;
+    }
 
     // Fire-and-forget: check if low-stock alert is needed.
     // Never block the response — errors are logged internally.

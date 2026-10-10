@@ -57,11 +57,13 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
       return;
     }
 
-    // Atomic transaction: update product qty + create receipt record
+    // Atomic transaction: increment product qty + create receipt record.
+    // `increment` is applied by the database, so a removal landing at the
+    // same moment cannot be overwritten by a stale read.
     const [, receipt] = await prisma.$transaction([
       prisma.product.update({
         where: { id: productId },
-        data: { currentQty: product.currentQty + actualQty },
+        data: { currentQty: { increment: actualQty } },
       }),
       prisma.receipt.create({
         data: {
