@@ -109,7 +109,7 @@ export async function checkAndSendAlert(
 /**
  * Returns true if an alert has already been sent for this product today (UTC).
  */
-export async function getDailyAlertStatus(productId: number): Promise<boolean> {
+async function getDailyAlertStatus(productId: number): Promise<boolean> {
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
