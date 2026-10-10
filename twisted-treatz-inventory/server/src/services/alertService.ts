@@ -90,8 +90,16 @@ export async function checkAndSendAlert(
       ORDER BY "currentQty" ASC
     `;
 
-    // Send the email
-    await sendLowStockEmail(product, removalInfo, lowStockProducts);
+    // Send the email. If SendGrid is not configured nothing goes out, and we
+    // must NOT record an AlertLog row or claim "sent" — doing so hid a dead
+    // mail path behind healthy-looking logs in production.
+    const sent = await sendLowStockEmail(product, removalInfo, lowStockProducts);
+    if (!sent) {
+      console.warn(
+        `[AlertService] Low stock NOT emailed for "${product.name}" (qty: ${product.currentQty}, threshold: ${product.alertThreshold}) — SendGrid is not configured. No AlertLog row written.`,
+      );
+      return;
+    }
 
     // Log to AlertLog so we don't send again today
     await prisma.alertLog.create({
@@ -143,13 +151,9 @@ async function sendLowStockEmail(
   product: ProductAlertData,
   removalInfo: RemovalAlertInfo,
   allLowStockProducts: ProductAlertData[],
-): Promise<void> {
+): Promise<boolean> {
   if (!sendgridReady || !ALERT_FROM_EMAIL || !ALERT_TO_EMAIL) {
-    console.warn(
-      "[AlertService] Email not sent — SendGrid is not configured. " +
-        `Product: "${product.name}", Qty: ${product.currentQty}, Threshold: ${product.alertThreshold}`,
-    );
-    return;
+    return false;
   }
 
   const msg = {
@@ -168,4 +172,5 @@ async function sendLowStockEmail(
   };
 
   await sgMail.send(msg);
+  return true;
 }

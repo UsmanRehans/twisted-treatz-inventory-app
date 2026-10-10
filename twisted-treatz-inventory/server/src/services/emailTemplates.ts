@@ -14,7 +14,7 @@ interface RemovalInfo {
   removedAt: Date;
 }
 
-const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://twistedtreatz.com";
+const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || "https://inventory.twistedtreatz.com";
 
 // Admin-entered strings (product names, categories, member names) must not
 // be interpretable as markup when interpolated into email HTML.
