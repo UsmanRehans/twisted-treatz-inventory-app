@@ -4,6 +4,7 @@
 
 import sgMail from "@sendgrid/mail";
 import { prisma } from "../lib/prisma.js";
+import { chicagoDayBounds } from "../lib/businessDay.js";
 import { lowStockEmailHtml, lowStockEmailSubject } from "./emailTemplates.js";
 
 // ─── SendGrid Configuration ─────────────────────────────────────────
@@ -115,21 +116,18 @@ export async function checkAndSendAlert(
 }
 
 /**
- * Returns true if an alert has already been sent for this product today (UTC).
+ * Returns true if an alert has already been sent for this product today
+ * (America/Chicago calendar day).
  */
 async function getDailyAlertStatus(productId: number): Promise<boolean> {
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
+  const today = chicagoDayBounds();
 
   const existing = await prisma.alertLog.findFirst({
     where: {
       productId,
       sentAt: {
-        gte: todayStart,
-        lte: todayEnd,
+        gte: today.start,
+        lte: today.end,
       },
     },
   });

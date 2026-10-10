@@ -62,7 +62,7 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 ## Alert Rules
 - Email fires when a floor removal leaves a product AT OR BELOW its threshold (`server/src/services/alertService.ts`, called only from the removals route). Admin bulk updates and threshold imports never email but flag low stock (`belowThreshold`) in their result summary; catalog imports neither email nor flag it
 - Sent to the `ALERT_TO_EMAIL` address from `ALERT_FROM_EMAIL` (env vars, not the Admin row's email). If `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` or `ALERT_TO_EMAIL` is unset, nothing is emailed but the AlertLog row is still written
-- One alert per product per calendar day (UTC day boundaries), enforced via `AlertLog`
+- One alert per product per America/Chicago calendar day (`server/src/lib/businessDay.ts`), enforced via `AlertLog`
 - SendGrid for delivery
 
 ## Invariants — every change is checked against these
@@ -78,7 +78,7 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 - `JWT_SECRET` must be set in production — the server refuses to boot without it
 - Admin emails must be exactly `@twistedtreatz.com` (no subdomains/lookalikes): any writer of an admin email must call `isAllowedAdminEmail` from `server/src/lib/adminEmailPolicy.ts` (today only the seed script writes one)
 - Browser CORS is pinned: prod frontend origin + localhost in dev (`CORS_EXTRA_ORIGINS` env var for anything else)
-- Alerts fire at-or-below threshold on floor removals, max once per product per calendar day (UTC day boundaries)
+- Alerts fire at-or-below threshold on floor removals, max once per product per America/Chicago calendar day
 
 ## Testing — run before claiming anything works
 - `cd server && npm test` — vitest + supertest suite in `server/tests/` (auth matrix, login flows, stock math, alert rules). Prisma is mocked via the shared client in `server/src/lib/prisma.ts` — always import `prisma` from there, never `new PrismaClient()`
@@ -101,7 +101,7 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 - All API routes prefixed with /api/v1/
 - All responses: { success: boolean, data: any, error?: string }
 - Never expose PIN hashes or password hashes in API responses
-- All timestamps stored as UTC in DB, displayed in America/Chicago timezone
+- All timestamps stored as UTC in DB, displayed in America/Chicago timezone; day boundaries (alert dedupe, "removed today", date-range filters) are America/Chicago calendar days via `server/src/lib/businessDay.ts`
 
 ## iPad-Specific Rules
 - All interactive elements minimum 48px tall

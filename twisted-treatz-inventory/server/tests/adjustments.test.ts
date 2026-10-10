@@ -307,6 +307,24 @@ describe("GET /api/v1/admin/activity (unified feed)", () => {
     expect(res.body.data.total).toBe(3);
   });
 
+  it("interprets startDate/endDate as Chicago calendar days", async () => {
+    const res = await request(app)
+      .get("/api/v1/admin/activity?startDate=2026-10-09&endDate=2026-10-09")
+      .set(auth(adminToken));
+    expect(res.status).toBe(200);
+    const where = mockPrisma.removal.findMany.mock.calls[0][0].where;
+    expect(where.createdAt.gte.toISOString()).toBe("2026-10-09T05:00:00.000Z"); // midnight CDT
+    expect(where.createdAt.lte.toISOString()).toBe("2026-10-10T04:59:59.999Z");
+  });
+
+  it("rejects a malformed date filter with 400 instead of a 500", async () => {
+    const res = await request(app)
+      .get("/api/v1/admin/activity?startDate=garbage")
+      .set(auth(adminToken));
+    expect(res.status).toBe(400);
+    expect(mockPrisma.removal.findMany).not.toHaveBeenCalled();
+  });
+
   it("returns only removals when a member filter is set", async () => {
     const res = await request(app)
       .get("/api/v1/admin/activity?memberId=2")

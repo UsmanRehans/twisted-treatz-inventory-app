@@ -106,9 +106,9 @@ describe("checkAndSendAlert", () => {
     expect(mockPrisma.alertLog.create).not.toHaveBeenCalled();
   });
 
-  it("checks today's UTC day window when looking for prior alerts", async () => {
+  it("checks today's Chicago calendar-day window when looking for prior alerts", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-09T20:30:00.000Z"));
+    vi.setSystemTime(new Date("2026-10-10T03:00:00.000Z")); // 22:00 CDT on Oct 9
     try {
       mockPrisma.product.findUnique.mockResolvedValue(productAt(2, 10));
       mockPrisma.alertLog.findFirst.mockResolvedValue(null);
@@ -116,8 +116,9 @@ describe("checkAndSendAlert", () => {
 
       const query = mockPrisma.alertLog.findFirst.mock.calls[0][0];
       expect(query.where.productId).toBe(1);
-      expect(query.where.sentAt.gte.toISOString()).toBe("2026-10-09T00:00:00.000Z");
-      expect(query.where.sentAt.lte.toISOString()).toBe("2026-10-09T23:59:59.999Z");
+      // Still Oct 9 in Chicago even though UTC has rolled over to Oct 10
+      expect(query.where.sentAt.gte.toISOString()).toBe("2026-10-09T05:00:00.000Z");
+      expect(query.where.sentAt.lte.toISOString()).toBe("2026-10-10T04:59:59.999Z");
     } finally {
       vi.useRealTimers();
     }

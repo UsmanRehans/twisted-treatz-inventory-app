@@ -22,9 +22,9 @@ This is why CLAUDE.md referred to "retired blueprint" agents and `/ipad-check`, 
 `railway.json` `startCommand` and `Procfile` run `node dist/src/index.js`; `npm start` pointed at a non-existent `dist/index.js` for months without anyone noticing.
 `tsc` emits under `dist/src/` because `tsconfig.json` has `rootDir: "."` and also compiles `prisma/`. Fixed in the audit PR, but if the three ever disagree again, Railway's file is the one that matters.
 
-## "Today" in the API is a UTC day; only display is Chicago
-Alert dedupe, the dashboard's "removed today" and every date-range filter use `setUTCHours` boundaries, so the business day rolls over at 7 pm CDT / 6 pm CST.
-Timestamps are stored UTC and formatted in `America/Chicago` on the client and in emails, which hides this. Any "per day" promise in docs means UTC day unless the five window computations are changed together.
+## Day boundaries are Chicago calendar days, computed in one place
+Until 2026-10 alert dedupe, the dashboard's "removed today" and every date-range filter used `setUTCHours`, so the business day rolled over at 7 pm CDT / 6 pm CST while the UI formatted everything in Chicago time and hid it.
+All five call sites now go through `server/src/lib/businessDay.ts` (`chicagoDayBounds`, `parseChicagoDate`), whose tests pin the two daylight-saving days. Add any new "per day" logic there, not inline.
 
 ## The Prisma mock cannot prove rollback
 `tests/helpers/mockPrisma.ts` implements `$transaction` as `Promise.all(ops)`, and every mocked write resolves when called, before the "transaction" runs.

@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { parseChicagoDate } from "../lib/businessDay.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
 
 const router = Router();
@@ -137,17 +138,25 @@ router.get("/", requireAdmin, async (req: AdminRequest, res: Response) => {
       where.supplier = { contains: supplier, mode: "insensitive" };
     }
 
-    // Date range filter
+    // Date range filter — Chicago calendar days (YYYY-MM-DD), so an evening
+    // entry lands on the day the floor saw it, not the next UTC day.
     if (startDate || endDate) {
       where.createdAt = {};
-      if (startDate && typeof startDate === "string") {
-        where.createdAt.gte = new Date(startDate);
+      if (startDate) {
+        const day = parseChicagoDate(startDate);
+        if (!day) {
+          res.status(400).json({ success: false, data: null, error: "startDate must be YYYY-MM-DD" });
+          return;
+        }
+        where.createdAt.gte = day.start;
       }
-      if (endDate && typeof endDate === "string") {
-        // Include the full end date day
-        const end = new Date(endDate);
-        end.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
+      if (endDate) {
+        const day = parseChicagoDate(endDate);
+        if (!day) {
+          res.status(400).json({ success: false, data: null, error: "endDate must be YYYY-MM-DD" });
+          return;
+        }
+        where.createdAt.lte = day.end;
       }
     }
 
