@@ -66,11 +66,11 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 - SendGrid for delivery
 
 ## Invariants — every change is checked against these
-- Stock changes are transactional: qty update + audit record (Removal/Receipt) commit together, with qtyBefore/qtyAfter snapshots on removals
+- Stock changes are transactional: qty update + audit record (Removal/Receipt/Adjustment) commit together, with qtyBefore/qtyAfter snapshots on removals and adjustments
 - Stock never goes negative; removals exceeding currentQty are rejected
 - Receipts increment stock by ACTUAL counted qty, never the PO's expected qty
 - Team members can only remove stock; only admins can add stock
-- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/*`, `GET /health`. Reads accept admin OR team tokens (`requireAnyAuth`); writes are role-specific
+- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), the login / forgot-password / reset-password endpoints under `POST /auth/*` (`POST /auth/admin/change-password` needs an admin token), and `GET /api/v1/health`. Product, brand and removal reads accept admin OR team tokens (`requireAnyAuth`); receipts, admin stats/activity and the CSV exports are admin-only; writes are role-specific
 - `pinHash` / `passwordHash` never appear in any API response
 - Both login flows are rate limited (5 attempts / 15 min, in-memory; expired entries are swept so the map can't grow unbounded)
 - Admin password change/reset revokes all outstanding admin JWTs: tokens carry a `tokenVersion` claim checked against `Admin.tokenVersion` on every admin-authed request (tokens minted before the claim count as 0); change-password returns a fresh token so the changing session stays signed in
@@ -78,7 +78,7 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 - `JWT_SECRET` must be set in production — the server refuses to boot without it
 - Admin emails must be exactly `@twistedtreatz.com` (no subdomains/lookalikes): any writer of an admin email must call `isAllowedAdminEmail` from `server/src/lib/adminEmailPolicy.ts` (today only the seed script writes one)
 - Browser CORS is pinned: prod frontend origin + localhost in dev (`CORS_EXTRA_ORIGINS` env var for anything else)
-- Alerts fire at-or-below threshold, max once per product per day
+- Alerts fire at-or-below threshold on floor removals, max once per product per calendar day (UTC day boundaries)
 
 ## Testing — run before claiming anything works
 - `cd server && npm test` — vitest + supertest suite in `server/tests/` (auth matrix, login flows, stock math, alert rules). Prisma is mocked via the shared client in `server/src/lib/prisma.ts` — always import `prisma` from there, never `new PrismaClient()`
