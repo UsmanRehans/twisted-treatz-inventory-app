@@ -144,10 +144,11 @@ twisted-treatz-inventory/
 └── docs/                          ← runbooks and the original kickoff prompt
 ```
 
-## Current Data
-- 204 SKUs already catalogued in twisted_treatz_inventory.xlsx
-- Categories: Raw material, Gummy, Jelly Beans, Caramel Chews, Swedish Bubs, Sour Candy, Hard Candy, Candy Corn, Jelly, Sweet Candy, Spicy Candy
-- Suppliers include: Sam's Club, Webstaurant, Costco, HEB, Target, Katom, Bakell, Albanese Direct, etc.
+## Seed Data
+- The original catalogue is `data/raw_materials.csv` (203 data rows, two duplicate names), loaded by `server/prisma/seed.ts`. The spreadsheet it was exported from is not in the repo, and the live catalogue has since grown well past it (Hani's sheet import, 2026-06-29)
+- CSV categories: Raw material (one row is spelled "Raw Material" and seeds as a separate category), Gummy, Jelly Beans, Jelly, Caramel Chews, Sour Candy, Swedish Bubs, Candy Corn, Sweet Candy, Hard Candy, Spicy Candy, Grocery
+- The CSV has no supplier column; `supplier` is seeded null and filled in by admins later
+- `npm run db:seed` DELETES every receipt, removal, alert log, product and brand before inserting. Never run it against the shared production database (local `server/.env` points there)
 
 ## Build Order (follow this sequence)
 1. Database schema + Prisma setup
