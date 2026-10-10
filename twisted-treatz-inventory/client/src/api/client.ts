@@ -72,6 +72,28 @@ async function apiFetch<T>(
     },
   });
 
+  // The API always answers with the JSON envelope; anything else means the
+  // request never reached it (proxy 502, wrong URL), so say that instead of
+  // surfacing a JSON parse error.
+  if (!(res.headers.get("content-type") ?? "").includes("application/json")) {
+    throw new Error(
+      res.ok
+        ? "Unexpected non-JSON response from the inventory API"
+        : `The inventory API did not respond (HTTP ${res.status}). Check that the server is running.`,
+    );
+  }
+
+  // The API always answers with the JSON envelope; anything else means the
+  // request never reached it (proxy 502, wrong URL), so say that instead of
+  // surfacing a JSON parse error.
+  if (!(res.headers.get("content-type") ?? "").includes("application/json")) {
+    throw new Error(
+      res.ok
+        ? "Unexpected non-JSON response from the inventory API"
+        : `The inventory API did not respond (HTTP ${res.status}). Check that the server is running.`,
+    );
+  }
+
   const json: ApiResponse<T> = await res.json();
 
   if (!json.success) {
