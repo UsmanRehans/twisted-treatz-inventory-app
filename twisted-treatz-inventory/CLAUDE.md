@@ -150,7 +150,7 @@ twisted-treatz-inventory/
 - The CSV has no supplier column; `supplier` is seeded null and filled in by admins later
 - `npm run db:seed` DELETES every receipt, removal, alert log, product and brand before inserting. Never run it against the shared production database (local `server/.env` points there)
 
-## Build Order (follow this sequence)
+## Original build order (historical — every step below is done)
 1. Database schema + Prisma setup
 2. Seed script (import 204 SKUs from CSV)
 3. Auth system (admin login + team member PIN)
