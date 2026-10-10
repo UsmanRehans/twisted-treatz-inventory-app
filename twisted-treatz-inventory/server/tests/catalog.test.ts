@@ -217,6 +217,9 @@ describe("catalog import — apply (updates)", () => {
     expect(mockPrisma.adjustment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ productId: 7, delta: 5, qtyBefore: 7, qtyAfter: 12 }) }),
     );
+    // Both writes go through one transaction
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
     expect(res.body.data.summary.qtyChanges).toBe(1);
   });
 });

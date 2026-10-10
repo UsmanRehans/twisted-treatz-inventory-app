@@ -129,8 +129,12 @@ describe("POST /api/v1/adjustments/import — apply", () => {
     });
 
     expect(res.status).toBe(201);
-    // Each row is its own transaction (atomicity per row)
+    // Each row is its own transaction (atomicity per row), carrying the qty
+    // update and the Adjustment row together
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+    for (const call of mockPrisma.$transaction.mock.calls) {
+      expect(call[0]).toHaveLength(2);
+    }
 
     expect(mockPrisma.product.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 7 }, data: { currentQty: 20 } }),

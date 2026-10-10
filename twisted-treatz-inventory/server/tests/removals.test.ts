@@ -58,6 +58,8 @@ describe("POST /api/v1/removals — stock math", () => {
     );
     // Stock update and removal log must go through a transaction together
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
   });
 
   it("refuses to remove more than current stock", async () => {

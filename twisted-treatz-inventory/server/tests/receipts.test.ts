@@ -60,6 +60,8 @@ describe("POST /api/v1/receipts — stock math", () => {
       expect.objectContaining({ data: { currentQty: 16 } })
     );
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    // ...and that transaction carries both the qty update and the receipt row
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
   });
 
   it("records both expected and actual so discrepancies are auditable", async () => {
