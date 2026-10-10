@@ -150,6 +150,22 @@ describe("POST /api/v1/adjustments/import — apply", () => {
     expect(res.body.data.batchId).toBeTruthy();
   });
 
+  it("reports a row whose write failed and still applies the rest", async () => {
+    mockPrisma.$transaction.mockRejectedValueOnce(new Error("db hiccup"));
+    const res = await importRows({
+      rows: [
+        { id: 7, newQty: 20, csvQty: 4 },
+        { id: 8, newQty: 90, csvQty: 100 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2); // second row still attempted
+    expect(res.body.data.applyFailures).toEqual([expect.objectContaining({ id: 7, name: "Sour Patch Bulk" })]);
+    expect(res.body.data.applied.map((r: { id: number }) => r.id)).toEqual([8]);
+    expect(res.body.data.summary).toMatchObject({ changes: 1, failed: 1 });
+    expect(res.body.data.batchId).toBeTruthy();
+  });
+
   it("groups every applied row under one batchId", async () => {
     await importRows({ rows: [{ id: 7, newQty: 5 }, { id: 8, newQty: 50 }] });
     const batches = mockPrisma.adjustment.create.mock.calls.map(
