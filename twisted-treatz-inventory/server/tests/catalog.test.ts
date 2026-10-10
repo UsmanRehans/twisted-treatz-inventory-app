@@ -47,7 +47,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   createdId = 1000;
   mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findMany.mockResolvedValue(existingProducts);
   mockPrisma.brand.findMany.mockResolvedValue([{ id: 5, name: "Boston" }]);
   mockPrisma.product.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
@@ -181,12 +180,22 @@ describe("catalog import — apply (creates)", () => {
     );
   });
 
-  it("creates a product with no Adjustment when counted qty is 0", async () => {
+  it("creates a product with no Adjustment when the qty cell is blank (treated as 0)", async () => {
     const res = await importCatalog({
       rows: [{ item: "Empty Count Item", category: "Gummy", brand: "Boston", packSize: 20, uom: "lb" }],
     });
     expect(mockPrisma.product.create).toHaveBeenCalled();
     expect(mockPrisma.adjustment.create).not.toHaveBeenCalled(); // qty 0 → no stock movement
+    expect(res.body.data.summary.zeroed).toBe(1);
+  });
+
+  it("creates a product with no Adjustment when the counted qty is an explicit 0", async () => {
+    const res = await importCatalog({
+      rows: [{ item: "Explicit Zero Item", category: "Gummy", brand: "Boston", packSize: 20, uom: "lb", qty: 0 }],
+    });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.product.create).toHaveBeenCalled();
+    expect(mockPrisma.adjustment.create).not.toHaveBeenCalled();
     expect(res.body.data.summary.zeroed).toBe(1);
   });
 });
@@ -217,6 +226,9 @@ describe("catalog import — apply (updates)", () => {
     expect(mockPrisma.adjustment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ productId: 7, delta: 5, qtyBefore: 7, qtyAfter: 12 }) }),
     );
+    // Both writes go through one transaction
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
     expect(res.body.data.summary.qtyChanges).toBe(1);
   });
 });

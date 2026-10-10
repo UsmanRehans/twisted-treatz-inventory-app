@@ -5,12 +5,16 @@ our sheet mirrors Hani's master inventory count (Item, Category, Qty, Pack
 Size, UOM, Brand), puts Brand/Pack Size/UOM into the Bulk Update download, and
 ships a guarded **Catalog Import** that ingests Hani's `.xlsx`/`.csv` directly.
 
-> **Prerequisite — the Brand migration must land first.** Production is still
-> on the pre-Brand schema (`20260629000000_add_brand_table_and_rename` is
-> unapplied). Do the entire [BRAND_MIGRATION.md](BRAND_MIGRATION.md) runbook
-> (steps 0–6 at minimum) before anything below. The new code selects the
-> `brand` relation and `packSize`/`uom`; running it against the old schema
-> throws.
+> **Status: applied to production.** The Brand migration, this migration and
+> Hani's sheet import have all run (see
+> [PRODUCT_EDIT_DEACTIVATE_RUNBOOK.md](PRODUCT_EDIT_DEACTIVATE_RUNBOOK.md),
+> which records that `packSize`, `uom` and the Brand relation already exist
+> in production). Kept as the record of how it was done.
+>
+> **Prerequisite if ever replayed on a fresh database:** the Brand migration
+> must land first — do [BRAND_MIGRATION.md](BRAND_MIGRATION.md) steps 0–6
+> before anything below. The code selects the `brand` relation and
+> `packSize`/`uom`; running it against the pre-Brand schema throws.
 
 ## What changed (code, already merged-ready)
 
@@ -35,7 +39,7 @@ ships a guarded **Catalog Import** that ingests Hani's `.xlsx`/`.csv` directly.
 | 0 | Complete BRAND_MIGRATION.md (brand table live + backfilled + brand code deployed). | `GET /api/v1/brands` returns brands. |
 | 1 | `pg_dump` snapshot (cheap insurance before another DDL). | Dump exists. |
 | 2 | `cd server && npx prisma migrate deploy` — applies `20260629020000_add_pack_size_uom`. **Non-breaking**: both columns are nullable, existing code ignores them. | `\d "Product"` shows `packSize`, `uom`. |
-| 3 | `cd server && npm test && npx tsc --noEmit` — green. | 142+ tests pass. |
+| 3 | `cd server && npm test && npx tsc --noEmit` — green. | Every test passes. |
 | 4 | Deploy backend (Railway). Confirm it landed (auto-deploy is unreliable). | `GET /api/v1/adjustments/export` header includes `brand,pack_size,uom`. |
 | 5 | Deploy frontend (Vercel). | Admin sees "Import Catalog" tab + Pack Size/UOM on Add Product. |
 | 6 | **Import Hani's sheet**: Admin → Import Catalog → upload `Inventory Count.xlsx` → review preview → Apply. | See below. |
@@ -47,7 +51,10 @@ The 302-row file parses cleanly (all 6 columns mapped). The preview will show:
 - **New products** — anything whose name we don't already have, created at
   qty 0 with an Adjustment recording the counted Qty.
 - **Updated products** — name matches; category/brand/packSize/uom and qty
-  reconciled. A blank cell never overwrites an existing value.
+  reconciled. A blank Category/Brand/Pack Size/UOM cell never overwrites an
+  existing value. **A blank Qty is different: it is treated as a count of 0
+  and WILL set a matched product's stock to 0** (flagged in the preview and
+  counted toward the typed-`ZERO` confirmation below).
 - **Flagged (blank cells) — 5 rows Hani must fill in the admin panel:**
   - `Filled Strawberry Delight` — blank Qty → treated as 0
   - `Sour Buttons Peach` — blank Qty → 0

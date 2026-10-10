@@ -27,6 +27,10 @@ const pinHash = bcrypt.hashSync(PIN, 4);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Each test starts with a clean rate-limit map, so the "5 then 429"
+  // assertions below are exact rather than contaminated by earlier tests
+  // that share supertest's source IP.
+  loginAttempts.clear();
 });
 
 describe("POST /api/v1/auth/admin/login", () => {
@@ -71,14 +75,12 @@ describe("POST /api/v1/auth/admin/login", () => {
     mockPrisma.admin.findUnique.mockResolvedValue(adminRecord);
     const email = "ratelimit-target@twistedtreatz.com";
 
-    // Limits are keyed by email AND by source IP; earlier tests in this
-    // file share supertest's IP, so failures may flip to 429 before the
-    // 5th email-keyed attempt. Either way: only 401s, then only 429s.
+    // Exactly five failures are allowed (per email and per IP), each a 401
     for (let i = 0; i < 5; i++) {
       const res = await request(app)
         .post("/api/v1/auth/admin/login")
         .send({ email, password: "wrong" });
-      expect([401, 429]).toContain(res.status);
+      expect(res.status).toBe(401);
     }
 
     const blocked = await request(app)
@@ -139,7 +141,10 @@ describe("POST /api/v1/auth/team/verify", () => {
     mockPrisma.teamMember.findUnique.mockResolvedValue({ ...memberRecord, id: 10 });
 
     for (let i = 0; i < 5; i++) {
-      await request(app).post("/api/v1/auth/team/verify").send({ memberId: 10, pin: "9999" });
+      const res = await request(app)
+        .post("/api/v1/auth/team/verify")
+        .send({ memberId: 10, pin: "9999" });
+      expect(res.status).toBe(401);
     }
 
     const blocked = await request(app)

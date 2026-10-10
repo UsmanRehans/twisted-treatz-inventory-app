@@ -39,8 +39,8 @@ cleanup: ~15–20 SKUs to retire, assorted "case vs bags" typos to fix.
   non-numeric and negative values with a 400 (previously a bad string
   crashed the request with a 500).
 - **Deps**: `npm audit fix` in `server/` cleared the axios/form-data
-  advisories (SendGrid SDK chain). The remaining bcrypt→tar advisories are
-  install-time-only and deferred to a dedicated bcrypt 6 bump.
+  advisories (SendGrid SDK chain). The remaining bcrypt→tar advisories were
+  install-time-only and have since been cleared by the bcrypt ^6 bump.
 
 ## Invariants re-verified (no code change needed, tests pin them)
 
@@ -57,7 +57,7 @@ cleanup: ~15–20 SKUs to retire, assorted "case vs bags" typos to fix.
 
 | # | Action | Verify |
 |---|--------|--------|
-| 1 | `cd server && npm test && npx tsc --noEmit` — green (193+ tests). | All pass, incl. the PATCH-allowlist, includeInactive fail-closed, inactive-by-ID, and unitPrice tests in `tests/products.test.ts`. |
+| 1 | `cd server && npm test && npx tsc --noEmit` — green. | All pass, incl. the PATCH-allowlist, includeInactive fail-closed, inactive-by-ID, and unitPrice tests in `tests/products.test.ts`. |
 | 2 | `cd client && npm run build` — green. | Build completes. |
 | 3 | Merge PR into `main`. | — |
 | 4 | Deploy backend: `railway up` **from repo root** (auto-deploy is unreliable — confirm it landed). | As admin: `GET /api/v1/products?includeInactive=true` returns rows; `PATCH` a product's `purchaseUnit` succeeds. |

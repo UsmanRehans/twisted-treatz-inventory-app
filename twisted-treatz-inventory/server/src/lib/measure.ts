@@ -7,7 +7,7 @@
 // Units Hani actually uses today. Not a hard enum — anything is accepted
 // (future "oz", "each", "case"…) — but a value in this set is lower-cased
 // to its canonical spelling so "LB"/"Lb"/"lb" don't fork into three.
-export const KNOWN_UOMS = ["lb", "ct", "oz", "each", "case", "box", "bag", "gallon"] as const;
+const KNOWN_UOMS = ["lb", "ct", "oz", "each", "case", "box", "bag", "gallon"] as const;
 
 const MAX_UOM_LENGTH = 16;
 

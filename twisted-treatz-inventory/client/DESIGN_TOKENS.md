@@ -30,6 +30,7 @@ a color rebrand — we deliberately did **not** swap to a saturated candy accent
 | `gray-500` | `#756A60` | Muted text (AA on white) |
 | `gray-600` | `#5E544B` | Secondary text |
 | `gray-700` | `#4A4138` | — |
+| `gray-800` | `#353029` | — |
 | `gray-900` | `#2A2320` | **Primary text** — warm charcoal |
 
 Cards stay **white** (`#FFFFFF`) and lift off the warm canvas with a soft
@@ -40,8 +41,14 @@ shadow rather than a cold outline.
 |---|---|---|
 | `indigo-50` | `#EEF1FA` | Active-tab fill, chip tint |
 | `indigo-100` | `#DCE3F4` | Light fills |
+| `indigo-200` | `#C3D0EC` | — |
+| `indigo-300` | `#9FB2DE` | — |
+| `indigo-400` | `#7B92D0` | — |
+| `indigo-500` | `#6A80C9` | — |
 | `indigo-600` | `#5B73C4` | **Primary** — CTAs, active states (white text ≈ 4.5:1) |
 | `indigo-700` | `#4A60AC` | Hover, accent text on light tint |
+| `indigo-800` | `#3C4E8C` | — |
+| `indigo-900` | `#313F70` | — |
 
 Semantic colors (`green` / `amber` / `red`) are left as Tailwind defaults — they
 already encode success / warning / danger correctly.
