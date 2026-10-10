@@ -129,9 +129,9 @@ Backend `/api/v1/health` → ok. Frontend bundle `index-C8bpxCs8.js` contains "H
 
 ---
 
-## What the PR contains (38 fix commits, one fix each, plus this document)
+## What the PR contains (one fix per commit; see the branch log)
 
-Code: Receive.tsx hook order (finding 3); `npm start` path (5); two unexported server symbols and an unused client helper/CSS rule (21). Docs: CLAUDE.md ×9 (15), runbooks ×7 (16), agent files ×3 and DESIGN_TOKENS (17), seed and reset-script comments, receipts test header, `.env.example` (13), kickoff banner. Deletions: five template files (21). Tests: eight commits (18). Plus `AUDIT.md` and `docs/LESSONS.md`.
+Code: Receive.tsx hook order (finding 3); `npm start` path (5); two unexported server symbols and an unused client helper, type and CSS rule (21). Docs: CLAUDE.md (15, plus five wording corrections from the fresh-context review of this branch), runbooks ×7 (16), agent files ×3 and DESIGN_TOKENS (17), seed and reset-script comments, receipts test header, `.env.example` (13), kickoff banner. Deletions: five template files (21). Tests: nine commits (18). Plus `AUDIT.md` and `docs/LESSONS.md`.
 
 Before (origin/main): server 15 files / 216 tests pass; `tsc --noEmit` clean; client build clean; client lint 10 errors, 1 warning.
 After: server 16 files / 224 tests pass; `tsc --noEmit` clean; client build clean; client lint 6 errors, 1 warning.
