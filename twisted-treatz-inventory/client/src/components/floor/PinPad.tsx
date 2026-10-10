@@ -17,15 +17,23 @@ export default function PinPad({
   const [shaking, setShaking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Trigger shake animation when error changes
-  useEffect(() => {
+  // A new error clears the entry and shakes. Adjusting state in response to
+  // a prop change is done during render (React's recommended pattern); only
+  // the timer that ends the shake lives in an effect.
+  const [lastError, setLastError] = useState<string | null>(null);
+  if (error !== lastError) {
+    setLastError(error);
     if (error) {
       setShaking(true);
       setDigits("");
-      const timer = setTimeout(() => setShaking(false), 400);
-      return () => clearTimeout(timer);
     }
-  }, [error]);
+  }
+
+  useEffect(() => {
+    if (!shaking) return;
+    const timer = setTimeout(() => setShaking(false), 400);
+    return () => clearTimeout(timer);
+  }, [shaking]);
 
   const handleDigit = useCallback(
     (digit: string) => {
