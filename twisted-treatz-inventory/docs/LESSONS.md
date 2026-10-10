@@ -30,6 +30,10 @@ Timestamps are stored UTC and formatted in `America/Chicago` on the client and i
 `tests/helpers/mockPrisma.ts` implements `$transaction` as `Promise.all(ops)`, and every mocked write resolves when called, before the "transaction" runs.
 A test can pin that both writes are in the one `$transaction` array (op-list length, now asserted), but a "fails atomically" test would pass or fail for the wrong reasons. Real rollback semantics need a different helper.
 
+## The server tests depend on vitest's default per-file isolation
+There is no vitest config, so each test file runs in its own process with mock implementations kept across `vi.clearAllMocks()`.
+`tests/alerts.test.ts` stubs the SendGrid env with `vi.hoisted`, `auth.ts`'s `loginAttempts` map is module-level, and the shared `$transaction` implementation in `tests/helpers/mockPrisma.ts` is relied on by six files. Turning on `--no-isolate`, `mockReset` or `restoreMocks` would break all three in confusing ways; add a config file deliberately if that ever changes.
+
 ## Rate-limit tests share one source IP
 supertest uses the same IP for every request in a file, and admin login limits by email AND IP, so earlier tests spend the IP budget.
 Clear the exported `loginAttempts` map in `beforeEach` (done in the audit PR); without it the only honest assertion is "401 or 429".
