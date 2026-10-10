@@ -14,9 +14,13 @@ It now refuses to run with `NODE_ENV=production` or unless `SEED_ALLOW_WIPE` equ
 Files under `twisted-treatz-inventory/.claude/` only reach the repo with `git add -f`; new agent or command files silently stay local.
 This is why CLAUDE.md referred to "retired blueprint" agents and `/ipad-check`, `/status` commands that a fresh clone does not have. The tracked set is six agents and eight commands; check `git ls-files twisted-treatz-inventory/.claude` before pointing anyone at a file there.
 
-## Client lint has been red since the first commit
-`eslint-plugin-react-hooks` v7's recommended config (`set-state-in-effect`, `rules-of-hooks`) has been on since `13da445`, and `npm run lint` has never exited 0.
-`npm run build` (`tsc -b && vite build`) is the gate that actually protects the client. Until the six remaining errors are fixed, a new lint error is invisible in the noise; look at the count, not the exit code.
+## Client lint was red from the first commit until 2026-10
+`eslint-plugin-react-hooks` v7's recommended config (`set-state-in-effect`, `rules-of-hooks`, `set-state-in-render`) has been on since `13da445`, and `npm run lint` never exited 0 until the audit fixes.
+It is now part of the pre-merge checks in CLAUDE.md. The v7 rules reject `setState` directly inside an effect body; the fixes used derived state (a "loaded for key" value instead of a `loading` flag), render-time prop comparison (PinPad) and initializer-based reads (useAdminAuth). Reach for those patterns rather than disabling the rule.
+
+## Verify against a throwaway Postgres, never the shared one
+Docker is on the dev machine, so the full stack can be exercised locally in a few minutes: `docker run -d --name tt-pg -e POSTGRES_USER=x -e POSTGRES_PASSWORD=y -e POSTGRES_DB=tt -p 55432:5432 postgres:16-alpine`, then in `server/` with `DATABASE_URL=postgresql://x:y@localhost:55432/tt` run `npx prisma migrate deploy` and `SEED_ALLOW_WIPE=localhost NODE_ENV=development SEED_ADMIN_EMAIL=... SEED_ADMIN_PASSWORD=... npx prisma db seed`, start the API with `JWT_SECRET` set and `npx tsx watch src/index.ts`, and run the client with `npm run dev` (its proxy targets port 3001).
+This is how the audit fixes were verified (concurrent removals, Chicago "today", login/logout, floor PIN flow) without `.env` ever pointing at production. The seed prints temporary PINs for the six members; `scripts/reset-admin-password.ts` sets a known admin password.
 
 ## Production starts the server from `railway.json`, not `npm start`
 `railway.json` `startCommand` and `Procfile` run `node dist/src/index.js`; `npm start` pointed at a non-existent `dist/index.js` for months without anyone noticing.
