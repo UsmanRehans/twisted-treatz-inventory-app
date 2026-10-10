@@ -120,7 +120,7 @@ Admin-login rate-limit test accepted `[401, 429]` on every attempt (per-email li
 `adminStats.ts:18-22,48-54` runs two raw queries over the same low-stock predicate (`lowStockCount` equals `lowStockProducts.length`) and awaits five independent queries sequentially; `adjustments.ts:181` and `thresholds.ts:151` call `rows.findIndex` inside the apply loop (O(n²) over up to 1000 rows); all three importers do one round-trip or transaction per row. Suspected only: `Removal`/`Receipt` have no index on `productId`/`createdAt` while `Adjustment` does. None of this matters at today's volume.
 
 ### 23. Security notes (not assessed, reported and left alone)
-- Your local, untracked `twisted-treatz-inventory/.claude/settings.local.json` (ignored only by your global gitignore) contains a plaintext admin password and a team JWT inside Bash permission entries. It is not in git. If that password is still live, rotate it and prune those entries.
+- An untracked local developer file (not in git, and deliberately not named here) still holds an admin password and a team JWT from early API testing. If that password is still live, rotate it and purge the file; the exact location was reported to you directly.
 - `server/src/services/tokenService.ts:7-16` gates the public fallback secret on `ALLOW_DEV_SECRET`, not on `NODE_ENV=production`; a production env with that flag set would boot with a known secret. It is not set on Railway.
 - `server/railway.json` builds with `npm install` and does not run `prisma migrate deploy` (migrations are manual, as the runbooks say).
 
@@ -139,7 +139,7 @@ After: server 16 files / 224 tests pass; `tsc --noEmit` clean; client build clea
 ## What I did not get to
 
 - Nothing was run against a database: the seed hazard (2), the lost-update race (7) and the Float→Int error (12) are reasoned from code and a stubbed probe, not reproduced on Postgres.
-- The uncommitted work in your main checkout (catalog import changes across nine files, untracked `server/scripts/set-team-pin.ts`) was deliberately not reviewed or touched; the audit branch is cut from `origin/main`.
+- Uncommitted work in your main checkout was deliberately not reviewed or touched; the audit branch is cut from `origin/main`.
 - Vercel: environment (`VITE_API_URL`) and project settings were not checked. Railway: the service's root-directory setting (which decides whether `railway up` runs from the repo root) was not checked.
 - The six remaining lint errors need refactors and were left alone.
 - Bundle size, accessibility and the `.claude/commands/*.md` prompt bodies (beyond path existence) were not reviewed.
