@@ -97,7 +97,7 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 ## Code Standards
 - ESM imports only (no require())
 - TypeScript preferred
-- Prettier formatting on every save
+- No formatter is configured; match the surrounding style
 - All API routes prefixed with /api/v1/
 - All responses: { success: boolean, data: any, error?: string }
 - Never expose PIN hashes or password hashes in API responses
