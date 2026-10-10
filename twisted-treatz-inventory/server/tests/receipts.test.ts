@@ -1,5 +1,6 @@
 // ─── Receiving stock math ───────────────────────────────────────────
-// Receipts are the ONLY way stock increases. Increments must be exact
+// Receipts are the only way a SHIPMENT adds stock (admin Adjustments and
+// catalog imports can also raise currentQty). Increments must be exact
 // and validation must catch bad quantities before any write.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
