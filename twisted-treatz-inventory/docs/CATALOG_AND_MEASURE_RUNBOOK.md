@@ -39,7 +39,7 @@ ships a guarded **Catalog Import** that ingests Hani's `.xlsx`/`.csv` directly.
 | 0 | Complete BRAND_MIGRATION.md (brand table live + backfilled + brand code deployed). | `GET /api/v1/brands` returns brands. |
 | 1 | `pg_dump` snapshot (cheap insurance before another DDL). | Dump exists. |
 | 2 | `cd server && npx prisma migrate deploy` — applies `20260629020000_add_pack_size_uom`. **Non-breaking**: both columns are nullable, existing code ignores them. | `\d "Product"` shows `packSize`, `uom`. |
-| 3 | `cd server && npm test && npx tsc --noEmit` — green. | 142+ tests pass. |
+| 3 | `cd server && npm test && npx tsc --noEmit` — green. | Every test passes. |
 | 4 | Deploy backend (Railway). Confirm it landed (auto-deploy is unreliable). | `GET /api/v1/adjustments/export` header includes `brand,pack_size,uom`. |
 | 5 | Deploy frontend (Vercel). | Admin sees "Import Catalog" tab + Pack Size/UOM on Add Product. |
 | 6 | **Import Hani's sheet**: Admin → Import Catalog → upload `Inventory Count.xlsx` → review preview → Apply. | See below. |
