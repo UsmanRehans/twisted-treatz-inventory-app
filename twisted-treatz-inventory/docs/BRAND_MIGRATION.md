@@ -7,6 +7,9 @@ procedure. The rename in step 2 makes the currently-deployed code throw until
 the new code ships in step 5 — **do steps 2→5 in one short maintenance
 window** (off-hours; ~10 min for a 7-person internal tool).
 
+> All commands below run from `twisted-treatz-inventory/server/` (where
+> `scripts/`, `prisma/` and `.env` live).
+
 > The drop of `brandText` (the final, destructive step) is intentionally NOT
 > committed as a Prisma migration folder — if it were, `prisma migrate deploy`
 > would apply it right after Migration A, before the backfill runs. Create it
