@@ -48,6 +48,32 @@ function cleanString(value: string | undefined | null): string | null {
 }
 
 async function main() {
+  // ─── Wipe guard ────────────────────────────────────────────────────
+  // This seed DELETES every product, brand, receipt, removal, adjustment
+  // and alert log before inserting. A local .env has pointed at the
+  // production database before, so the operator must name the host they
+  // intend to wipe, and production is refused outright.
+  const dbHost = (() => {
+    try {
+      return new URL(process.env.DATABASE_URL ?? "").hostname;
+    } catch {
+      return "";
+    }
+  })();
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Refusing to seed with NODE_ENV=production: the seed wipes the catalogue and all movement history.",
+    );
+  }
+  if (!dbHost || process.env.SEED_ALLOW_WIPE !== dbHost) {
+    throw new Error(
+      `Refusing to seed: this wipes every product, brand, receipt, removal, adjustment and alert log ` +
+        `in the database at "${dbHost || "(unparseable DATABASE_URL)"}". ` +
+        `If that is really what you want, re-run with SEED_ALLOW_WIPE=${dbHost || "<db host>"}.`,
+    );
+  }
+  console.log(`Seeding database at ${dbHost} (SEED_ALLOW_WIPE matched).`);
+
   // Path to the CSV relative to this file: ../../data/raw_materials.csv
   const csvPath = resolve(__dirname, "../../data/raw_materials.csv");
   console.log(`Reading CSV from: ${csvPath}`);
@@ -125,12 +151,17 @@ async function main() {
 
   console.log(`\nParsed ${products.length} products. Inserting into database...`);
 
-  // Clear existing products before seeding
-  await prisma.receipt.deleteMany();
-  await prisma.removal.deleteMany();
-  await prisma.alertLog.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.brand.deleteMany(); // safe now that products (the FK holders) are gone
+  // Clear the catalogue AND all movement history in one transaction, so a
+  // failure part-way (e.g. a foreign key) leaves nothing half-deleted.
+  // Adjustments reference products, so they must go before products do.
+  await prisma.$transaction([
+    prisma.receipt.deleteMany(),
+    prisma.removal.deleteMany(),
+    prisma.adjustment.deleteMany(),
+    prisma.alertLog.deleteMany(),
+    prisma.product.deleteMany(),
+    prisma.brand.deleteMany(), // safe now that products (the FK holders) are gone
+  ]);
 
   // ─── Brands ─────────────────────────────────────────────────────────
   // Promote distinct, normalized brand values into the Brand table, then

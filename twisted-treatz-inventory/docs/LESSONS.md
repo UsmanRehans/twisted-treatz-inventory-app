@@ -7,8 +7,8 @@ SendGrid has never been configured on the Railway backend, so low-stock alerts a
 `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` and `ALERT_TO_EMAIL` exist on Railway as empty strings (checked 2026-10-09). `alertService` still writes the `AlertLog` row and logs `Low stock alert sent` after skipping the send, so neither the logs nor the dedupe table tell you emails are off. Check the boot lines `Email alerts are disabled` / `Reset emails are disabled` in `railway logs` before trusting any alert claim.
 
 ## `npm run db:seed` is a wipe, and local `.env` is production
-The seed deletes every receipt, removal, alert log, product and brand before inserting, and the only thing that stops it finishing against production is the `Adjustment.productId` RESTRICT foreign key.
-Because there is no transaction, receipts/removals/alert logs are already gone when it aborts. Treat the seed as a destructive command: point `DATABASE_URL` at a throwaway database first. (AUDIT.md finding 2.)
+The seed deletes the whole catalogue and all movement history before inserting; until 2026-10 nothing stopped it running against production except the `Adjustment.productId` RESTRICT foreign key, which fired after receipts/removals/alert logs were already gone.
+It now refuses to run with `NODE_ENV=production` or unless `SEED_ALLOW_WIPE` equals the `DATABASE_URL` host, and deletes in one transaction. Still treat it as destructive: point `DATABASE_URL` at a throwaway database first. (AUDIT.md finding 2.)
 
 ## `.claude/` is ignored by the developer's global gitignore
 Files under `twisted-treatz-inventory/.claude/` only reach the repo with `git add -f`; new agent or command files silently stay local.

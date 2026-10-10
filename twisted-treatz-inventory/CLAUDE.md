@@ -148,7 +148,7 @@ twisted-treatz-inventory/
 - The original catalogue is `data/raw_materials.csv` (203 data rows, two duplicate names), loaded by `server/prisma/seed.ts`. The spreadsheet it was exported from is not in the repo, and the live catalogue has since grown well past it (Hani's sheet import, 2026-06-29)
 - CSV categories: Raw material (one row is spelled "Raw Material" and seeds as a separate category), Gummy, Jelly Beans, Jelly, Caramel Chews, Sour Candy, Swedish Bubs, Candy Corn, Sweet Candy, Hard Candy, Spicy Candy, Grocery
 - The CSV has no supplier column; `supplier` is seeded null and filled in by admins later
-- `npm run db:seed` DELETES every receipt, removal, alert log, product and brand before inserting, and on a database that already has Adjustment rows it aborts partway (the product delete hits the Adjustment foreign key after the movement history is already gone). Never run it against the shared production database (local `server/.env` points there)
+- `npm run db:seed` DELETES every receipt, removal, adjustment, alert log, product and brand (in one transaction) before inserting. It refuses to run with `NODE_ENV=production` or unless `SEED_ALLOW_WIPE` equals the `DATABASE_URL` host, so you must name the database you are wiping. Never point it at the shared production database (local `server/.env` points there)
 
 ## Original build order (historical — every step below is done)
 1. Database schema + Prisma setup
