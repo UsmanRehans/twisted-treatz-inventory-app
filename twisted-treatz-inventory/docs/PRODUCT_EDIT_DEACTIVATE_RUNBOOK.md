@@ -39,8 +39,8 @@ cleanup: ~15–20 SKUs to retire, assorted "case vs bags" typos to fix.
   non-numeric and negative values with a 400 (previously a bad string
   crashed the request with a 500).
 - **Deps**: `npm audit fix` in `server/` cleared the axios/form-data
-  advisories (SendGrid SDK chain). The remaining bcrypt→tar advisories are
-  install-time-only and deferred to a dedicated bcrypt 6 bump.
+  advisories (SendGrid SDK chain). The remaining bcrypt→tar advisories were
+  install-time-only and have since been cleared by the bcrypt ^6 bump.
 
 ## Invariants re-verified (no code change needed, tests pin them)
 
