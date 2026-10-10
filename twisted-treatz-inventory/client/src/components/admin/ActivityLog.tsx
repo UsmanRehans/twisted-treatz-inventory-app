@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   fetchActivity,
   fetchAdminTeamMembers,
@@ -65,7 +65,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
   const [categories, setCategories] = useState<string[]>([]);
 
   const limit = 50;
-  const requestKey = JSON.stringify({ type, memberId, category, startDate, endDate, page });
+  const requestKey = JSON.stringify({ token, type, memberId, category, startDate, endDate, page });
   const loading = loadedFor !== requestKey;
 
   // Changing a filter restarts at page 1 — done in the handlers, not an effect
@@ -86,7 +86,11 @@ export default function ActivityLog({ token }: ActivityLogProps) {
     fetchAdminCategories(token).then(setCategories).catch(console.error);
   }, [token]);
 
-  const loadActivity = useCallback(() => {
+  useEffect(() => {
+    // Ignore a reply that arrives after the filters/page changed again, so an
+    // out-of-order response can neither overwrite newer rows nor leave the
+    // spinner stuck on a key that no longer matches.
+    let stale = false;
     fetchActivity(token, {
       type,
       memberId,
@@ -97,16 +101,18 @@ export default function ActivityLog({ token }: ActivityLogProps) {
       limit,
     })
       .then((data) => {
+        if (stale) return;
         setEvents(data.events);
         setTotal(data.total);
       })
       .catch(console.error)
-      .finally(() => setLoadedFor(requestKey));
+      .finally(() => {
+        if (!stale) setLoadedFor(requestKey);
+      });
+    return () => {
+      stale = true;
+    };
   }, [token, type, page, memberId, category, startDate, endDate, requestKey]);
-
-  useEffect(() => {
-    loadActivity();
-  }, [loadActivity]);
 
   const totalPages = Math.ceil(total / limit);
 
