@@ -47,7 +47,10 @@ The 302-row file parses cleanly (all 6 columns mapped). The preview will show:
 - **New products** — anything whose name we don't already have, created at
   qty 0 with an Adjustment recording the counted Qty.
 - **Updated products** — name matches; category/brand/packSize/uom and qty
-  reconciled. A blank cell never overwrites an existing value.
+  reconciled. A blank Category/Brand/Pack Size/UOM cell never overwrites an
+  existing value. **A blank Qty is different: it is treated as a count of 0
+  and WILL set a matched product's stock to 0** (flagged in the preview and
+  counted toward the typed-`ZERO` confirmation below).
 - **Flagged (blank cells) — 5 rows Hani must fill in the admin panel:**
   - `Filled Strawberry Delight` — blank Qty → treated as 0
   - `Sour Buttons Peach` — blank Qty → 0
