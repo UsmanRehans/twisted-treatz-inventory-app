@@ -5,12 +5,16 @@ our sheet mirrors Hani's master inventory count (Item, Category, Qty, Pack
 Size, UOM, Brand), puts Brand/Pack Size/UOM into the Bulk Update download, and
 ships a guarded **Catalog Import** that ingests Hani's `.xlsx`/`.csv` directly.
 
-> **Prerequisite — the Brand migration must land first.** Production is still
-> on the pre-Brand schema (`20260629000000_add_brand_table_and_rename` is
-> unapplied). Do the entire [BRAND_MIGRATION.md](BRAND_MIGRATION.md) runbook
-> (steps 0–6 at minimum) before anything below. The new code selects the
-> `brand` relation and `packSize`/`uom`; running it against the old schema
-> throws.
+> **Status: applied to production.** The Brand migration, this migration and
+> Hani's sheet import have all run (see
+> [PRODUCT_EDIT_DEACTIVATE_RUNBOOK.md](PRODUCT_EDIT_DEACTIVATE_RUNBOOK.md),
+> which records that `packSize`, `uom` and the Brand relation already exist
+> in production). Kept as the record of how it was done.
+>
+> **Prerequisite if ever replayed on a fresh database:** the Brand migration
+> must land first — do [BRAND_MIGRATION.md](BRAND_MIGRATION.md) steps 0–6
+> before anything below. The code selects the `brand` relation and
+> `packSize`/`uom`; running it against the pre-Brand schema throws.
 
 ## What changed (code, already merged-ready)
 
