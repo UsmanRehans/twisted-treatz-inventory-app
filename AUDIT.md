@@ -129,7 +129,7 @@ Backend `/api/v1/health` → ok. Frontend bundle `index-C8bpxCs8.js` contains "H
 
 ---
 
-## What the PR contains (39 commits, one fix each)
+## What the PR contains (38 fix commits, one fix each, plus this document)
 
 Code: Receive.tsx hook order (finding 3); `npm start` path (5); two unexported server symbols and an unused client helper/CSS rule (21). Docs: CLAUDE.md ×9 (15), runbooks ×7 (16), agent files ×3 and DESIGN_TOKENS (17), seed and reset-script comments, receipts test header, `.env.example` (13), kickoff banner. Deletions: five template files (21). Tests: eight commits (18). Plus `AUDIT.md` and `docs/LESSONS.md`.
 
