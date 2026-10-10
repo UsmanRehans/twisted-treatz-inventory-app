@@ -61,7 +61,7 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 
 ## Alert Rules
 - Email fires when a floor removal leaves a product AT OR BELOW its threshold (`server/src/services/alertService.ts`, called only from the removals route). Admin bulk updates and threshold imports never email but flag low stock (`belowThreshold`) in their result summary; catalog imports neither email nor flag it
-- Sent to the `ALERT_TO_EMAIL` address from `ALERT_FROM_EMAIL` (env vars, not the Admin row's email). If `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` or `ALERT_TO_EMAIL` is unset, nothing is emailed but the AlertLog row is still written
+- Sent to the `ALERT_TO_EMAIL` address from `ALERT_FROM_EMAIL` (env vars, not the Admin row's email). If `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` or `ALERT_TO_EMAIL` is unset, nothing is emailed: a `[AlertService] Low stock NOT emailed` warning is logged and no AlertLog row is written, so the next removal tries again
 - One alert per product per America/Chicago calendar day (`server/src/lib/businessDay.ts`), enforced via `AlertLog`
 - SendGrid for delivery
 

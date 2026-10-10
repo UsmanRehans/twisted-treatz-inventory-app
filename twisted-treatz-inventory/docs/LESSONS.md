@@ -4,7 +4,7 @@ Things learned about this repo that were not written down anywhere. One lesson p
 
 ## Production has never been able to send email
 SendGrid has never been configured on the Railway backend, so low-stock alerts and password-reset emails have never gone out, while the app behaves as if they had.
-`SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` and `ALERT_TO_EMAIL` exist on Railway as empty strings (checked 2026-10-09). `alertService` still writes the `AlertLog` row and logs `Low stock alert sent` after skipping the send, so neither the logs nor the dedupe table tell you emails are off. Check the boot lines `Email alerts are disabled` / `Reset emails are disabled` in `railway logs` before trusting any alert claim.
+`SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` and `ALERT_TO_EMAIL` exist on Railway as empty strings (checked 2026-10-09). Until the 2026-10 fixes `alertService` wrote the `AlertLog` row and logged `Low stock alert sent` even when it skipped the send, so neither the logs nor the dedupe table showed that mail was off; it now logs `Low stock NOT emailed` and records nothing, and the forgot-password route answers 503. Check the boot lines `Email alerts are disabled` / `Reset emails are disabled` in `railway logs` before trusting any alert claim.
 
 ## `npm run db:seed` is a wipe, and local `.env` is production
 The seed deletes the whole catalogue and all movement history before inserting; until 2026-10 nothing stopped it running against production except the `Adjustment.productId` RESTRICT foreign key, which fired after receipts/removals/alert logs were already gone.
