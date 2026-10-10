@@ -181,12 +181,22 @@ describe("catalog import — apply (creates)", () => {
     );
   });
 
-  it("creates a product with no Adjustment when counted qty is 0", async () => {
+  it("creates a product with no Adjustment when the qty cell is blank (treated as 0)", async () => {
     const res = await importCatalog({
       rows: [{ item: "Empty Count Item", category: "Gummy", brand: "Boston", packSize: 20, uom: "lb" }],
     });
     expect(mockPrisma.product.create).toHaveBeenCalled();
     expect(mockPrisma.adjustment.create).not.toHaveBeenCalled(); // qty 0 → no stock movement
+    expect(res.body.data.summary.zeroed).toBe(1);
+  });
+
+  it("creates a product with no Adjustment when the counted qty is an explicit 0", async () => {
+    const res = await importCatalog({
+      rows: [{ item: "Explicit Zero Item", category: "Gummy", brand: "Boston", packSize: 20, uom: "lb", qty: 0 }],
+    });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.product.create).toHaveBeenCalled();
+    expect(mockPrisma.adjustment.create).not.toHaveBeenCalled();
     expect(res.body.data.summary.zeroed).toBe(1);
   });
 });
