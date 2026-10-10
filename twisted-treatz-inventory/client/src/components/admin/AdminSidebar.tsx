@@ -99,7 +99,12 @@ export default function AdminSidebar({
           Change Password
         </button>
         <button
-          onClick={logout}
+          onClick={() => {
+            logout();
+            // Each page holds its own copy of the auth state, so clearing
+            // storage alone leaves the open dashboard usable. Leave the page.
+            navigate("/admin/login", { replace: true });
+          }}
           className="w-full text-sm px-3 py-2 text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors font-medium"
         >
           Log Out
