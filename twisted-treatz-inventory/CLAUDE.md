@@ -107,27 +107,37 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 - Screen auto-resets to member selection after 30 seconds of inactivity
 
 ## File Structure
+The git repository root holds only README.md and this `twisted-treatz-inventory/` folder.
 ```
-/
-├── CLAUDE.md                  ← you are here
+twisted-treatz-inventory/
+├── CLAUDE.md                      ← you are here
 ├── .claude/
-│   ├── agents/                ← subagent definitions
-│   └── commands/              ← custom slash commands
-├── client/                    ← React frontend (Vite)
+│   ├── agents/                    ← subagent definitions (rick, isaiah, gideon, avery, james, zahid)
+│   └── commands/                  ← custom slash commands
+├── client/                        ← React frontend (Vite + Tailwind v4)
+│   └── src/
+│       ├── pages/
+│       │   ├── FloorApp.tsx       ← Screen 1: iPad removal UI
+│       │   ├── Admin.tsx          ← Screen 2: Admin dashboard
+│       │   ├── Receive.tsx        ← Screen 3: Receiving UI
+│       │   ├── AdminLogin.tsx, ForgotPassword.tsx, ResetPassword.tsx
+│       ├── components/admin/      ← dashboard tabs and modals
+│       ├── components/floor/      ← iPad screen pieces
+│       ├── api/                   ← client.ts (floor) + adminClient.ts (admin)
+│       ├── hooks/useAdminAuth.ts
+│       └── lib/                   ← csv.ts (own CSV parser), sheet.ts (lazy SheetJS)
+├── server/                        ← Node/Express backend
 │   ├── src/
-│   │   ├── pages/
-│   │   │   ├── FloorApp.tsx   ← Screen 1: iPad removal UI
-│   │   │   ├── Admin.tsx      ← Screen 2: Admin dashboard
-│   │   │   └── Receive.tsx    ← Screen 3: Receiving UI
-│   │   ├── components/
-│   │   └── api/               ← API client functions
-├── server/                    ← Node/Express backend
-│   ├── routes/
-│   ├── middleware/
-│   ├── prisma/
-│   └── services/
-│       └── alerts.ts          ← SendGrid email alerts
-└── docs/                      ← Project documentation
+│   │   ├── app.ts, index.ts
+│   │   ├── routes/                ← auth, products, brands, removals, receipts, adjustments, catalog, thresholds, teamMembers, adminStats
+│   │   ├── middleware/            ← requireAdmin, requireTeamMember, requireAnyAuth
+│   │   ├── services/              ← alertService.ts (SendGrid), emailTemplates.ts, passwordResetService.ts, tokenService.ts
+│   │   └── lib/                   ← prisma.ts (shared client), adminEmailPolicy.ts, brand.ts, measure.ts
+│   ├── prisma/                    ← schema.prisma, migrations/, seed.ts
+│   ├── scripts/                   ← one-off operational scripts (see docs/)
+│   └── tests/                     ← vitest + supertest suite
+├── data/raw_materials.csv         ← original catalogue used by the seed
+└── docs/                          ← runbooks and the original kickoff prompt
 ```
 
 ## Current Data
