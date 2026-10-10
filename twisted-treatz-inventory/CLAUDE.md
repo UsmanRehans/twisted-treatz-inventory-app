@@ -70,7 +70,7 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 - Stock never goes negative; removals exceeding currentQty are rejected
 - Receipts increment stock by ACTUAL counted qty, never the PO's expected qty
 - Team members can only remove stock; only admins can add stock
-- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), the login / forgot-password / reset-password endpoints under `POST /auth/*` (`POST /auth/admin/change-password` needs an admin token), and `GET /api/v1/health`. Product, brand and removal reads accept admin OR team tokens (`requireAnyAuth`); receipts, admin stats/activity and the CSV exports are admin-only; writes are role-specific
+- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/admin/login`, `/auth/team/verify`, `/auth/admin/request-reset` and `/auth/admin/reset-password` (`POST /auth/admin/change-password` needs an admin token), and `GET /api/v1/health`. Product, brand and removal reads accept admin OR team tokens (`requireAnyAuth`); receipts, admin stats/activity and the CSV exports are admin-only; writes are role-specific
 - `pinHash` / `passwordHash` never appear in any API response
 - Both login flows are rate limited (5 attempts / 15 min, in-memory; expired entries are swept so the map can't grow unbounded)
 - Admin password change/reset revokes all outstanding admin JWTs: tokens carry a `tokenVersion` claim checked against `Admin.tokenVersion` on every admin-authed request (tokens minted before the claim count as 0); change-password returns a fresh token so the changing session stays signed in
