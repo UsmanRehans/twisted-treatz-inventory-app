@@ -49,11 +49,15 @@ This is a private tool used exclusively by the owner and 6 team members.
 | Team Member | Screen 1 only | Name tap + 4-digit PIN |
 
 ## Database Key Tables
-- `products` — all SKUs with category, unit, brand, supplier, current_qty, alert_threshold
-- `users` — 6 team members with name, PIN hash, active flag
-- `admin` — single admin record with email, password hash
-- `removals` — log of every removal: user_id, product_id, qty, timestamp
-- `receipts` — log of every shipment received: product_id, expected_qty, actual_qty, supplier, admin_id, timestamp
+Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and columns camelCase (Prisma defaults), e.g. `"Product"."currentQty"` in raw SQL.
+- `Product` — every SKU: name, category, flavor, purchaseUnit, unitSize (legacy free text), packSize + uom, brandId → Brand (plus the transitional `brandText` column, still present), supplier, usedIn, currentQty, alertThreshold, unitPrice, active (soft delete), highRisk (visual label)
+- `Brand` — first-class brand: name (unique, normalized), active
+- `TeamMember` — floor team: name, initials, pinHash, active
+- `Admin` — one or more admins: email (unique, must be @twistedtreatz.com), passwordHash, name, resetTokenHash/resetTokenExpires, tokenVersion
+- `Removal` — every floor removal: productId, teamMemberId, qty, qtyBefore, qtyAfter, createdAt
+- `Receipt` — every shipment received: productId, adminId, supplier, expectedQty, actualQty, unitPrice, notes, createdAt
+- `Adjustment` — admin stock corrections (cycle count, bulk CSV, catalog import): productId, adminId, delta, qtyBefore, qtyAfter, reason, batchId, createdAt
+- `AlertLog` — productId + sentAt; backs the one-alert-per-product-per-day rule
 
 ## Alert Rules
 - Email fires when any product qty drops AT OR BELOW its threshold
