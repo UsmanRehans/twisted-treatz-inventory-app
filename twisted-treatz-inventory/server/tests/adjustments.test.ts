@@ -150,6 +150,22 @@ describe("POST /api/v1/adjustments/import — apply", () => {
     expect(res.body.data.batchId).toBeTruthy();
   });
 
+  it("reports a row whose write failed and still applies the rest", async () => {
+    mockPrisma.$transaction.mockRejectedValueOnce(new Error("db hiccup"));
+    const res = await importRows({
+      rows: [
+        { id: 7, newQty: 20, csvQty: 4 },
+        { id: 8, newQty: 90, csvQty: 100 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2); // second row still attempted
+    expect(res.body.data.applyFailures).toEqual([expect.objectContaining({ id: 7, name: "Sour Patch Bulk" })]);
+    expect(res.body.data.applied.map((r: { id: number }) => r.id)).toEqual([8]);
+    expect(res.body.data.summary).toMatchObject({ changes: 1, failed: 1 });
+    expect(res.body.data.batchId).toBeTruthy();
+  });
+
   it("groups every applied row under one batchId", async () => {
     await importRows({ rows: [{ id: 7, newQty: 5 }, { id: 8, newQty: 50 }] });
     const batches = mockPrisma.adjustment.create.mock.calls.map(
@@ -289,6 +305,24 @@ describe("GET /api/v1/admin/activity (unified feed)", () => {
     expect(events.find((e) => e.type === "receipt")!.delta).toBe(50);
     expect(events.find((e) => e.type === "adjustment")!.delta).toBe(-5);
     expect(res.body.data.total).toBe(3);
+  });
+
+  it("interprets startDate/endDate as Chicago calendar days", async () => {
+    const res = await request(app)
+      .get("/api/v1/admin/activity?startDate=2026-10-09&endDate=2026-10-09")
+      .set(auth(adminToken));
+    expect(res.status).toBe(200);
+    const where = mockPrisma.removal.findMany.mock.calls[0][0].where;
+    expect(where.createdAt.gte.toISOString()).toBe("2026-10-09T05:00:00.000Z"); // midnight CDT
+    expect(where.createdAt.lte.toISOString()).toBe("2026-10-10T04:59:59.999Z");
+  });
+
+  it("rejects a malformed date filter with 400 instead of a 500", async () => {
+    const res = await request(app)
+      .get("/api/v1/admin/activity?startDate=garbage")
+      .set(auth(adminToken));
+    expect(res.status).toBe(400);
+    expect(mockPrisma.removal.findMany).not.toHaveBeenCalled();
   });
 
   it("returns only removals when a member filter is set", async () => {

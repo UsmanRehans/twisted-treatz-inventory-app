@@ -68,6 +68,19 @@ export default function FloorApp() {
     };
   }, [resetIdle]);
 
+  // ─── Reset ──────────────────────────────────────────────────────
+  const resetToStart = useCallback(() => {
+    setStep("member");
+    setSelectedMember(null);
+    setAuthToken(null);
+    setPinError(null);
+    setSelectedProduct(null);
+    setSubmitting(false);
+    setSuccessInfo(null);
+    setIdleCountdown(null);
+    resetIdle();
+  }, [resetIdle]);
+
   // Idle timer tick — only runs when NOT on member select (step 1)
   useEffect(() => {
     if (step === "member" || step === "success") {
@@ -89,20 +102,7 @@ export default function FloorApp() {
     }, 500);
 
     return () => clearInterval(idleTimerRef.current);
-  }, [step]);
-
-  // ─── Reset ──────────────────────────────────────────────────────
-  const resetToStart = useCallback(() => {
-    setStep("member");
-    setSelectedMember(null);
-    setAuthToken(null);
-    setPinError(null);
-    setSelectedProduct(null);
-    setSubmitting(false);
-    setSuccessInfo(null);
-    setIdleCountdown(null);
-    resetIdle();
-  }, [resetIdle]);
+  }, [step, resetToStart]);
 
   // ─── Load team members on mount ─────────────────────────────────
   useEffect(() => {

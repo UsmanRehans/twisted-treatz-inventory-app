@@ -168,33 +168,50 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       });
     }
 
+    // Rows whose write failed: reported, never allowed to abort the batch.
+    const applyFailures: { id: number; name: string; reason: string }[] = [];
+
     if (!isDryRun) {
       // Plain field updates — no audit row, no alert emails (see header note).
       for (const c of changes) {
-        await prisma.product.update({
-          where: { id: c.id },
-          data: { alertThreshold: c.thresholdAfter },
-        });
+        try {
+          await prisma.product.update({
+            where: { id: c.id },
+            data: { alertThreshold: c.thresholdAfter },
+          });
+        } catch (err) {
+          console.error(`[Thresholds] Row for product ${c.id} (${c.name}) failed to apply:`, err);
+          applyFailures.push({
+            id: c.id,
+            name: c.name,
+            reason: "Database write failed; this row was not applied",
+          });
+        }
       }
     }
+
+    const failedIds = new Set(applyFailures.map((f) => f.id));
+    const applied = changes.filter((c) => !failedIds.has(c.id));
 
     res.status(isDryRun ? 200 : 201).json({
       success: true,
       data: {
         dryRun: isDryRun,
-        applied: changes,
+        applied,
         skipped,
+        applyFailures,
         summary: {
-          changes: changes.length,
+          changes: applied.length,
           unchanged,
-          raised: changes.filter((c) => c.thresholdAfter > c.thresholdBefore).length,
-          lowered: changes.filter((c) => c.thresholdAfter < c.thresholdBefore).length,
+          raised: applied.filter((c) => c.thresholdAfter > c.thresholdBefore).length,
+          lowered: applied.filter((c) => c.thresholdAfter < c.thresholdBefore).length,
           // Setting a threshold to 0 disables low-stock alerts for that item —
           // the one quasi-destructive act here, so the client gates a bulk
           // disable behind a typed confirm (mirrors Bulk Update's zero guard).
-          zeroed: changes.filter((c) => c.thresholdAfter === 0).length,
-          belowThreshold: changes.filter((c) => c.belowThreshold).length,
+          zeroed: applied.filter((c) => c.thresholdAfter === 0).length,
+          belowThreshold: applied.filter((c) => c.belowThreshold).length,
           errors: skipped.length,
+          failed: applyFailures.length,
         },
       },
     });

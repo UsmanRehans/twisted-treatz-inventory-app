@@ -334,6 +334,20 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
               ` ${result.summary.belowThreshold} are now at/below threshold (low stock).`}
             {result.summary.errors > 0 && ` ${result.summary.errors} rows were skipped.`}
           </p>
+          {result.applyFailures.length > 0 && (
+            <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm font-medium text-red-700 mb-1">
+                {result.applyFailures.length} rows failed to save — re-import to retry these:
+              </p>
+              <ul className="text-xs text-red-600 space-y-0.5 max-h-32 overflow-y-auto">
+                {result.applyFailures.map((f) => (
+                  <li key={f.id}>
+                    #{f.id} {f.name}: {f.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button
             onClick={resetToIdle}
             className="mt-3 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50"

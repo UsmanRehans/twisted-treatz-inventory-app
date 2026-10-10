@@ -204,6 +204,11 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
 
     const batchId = isDryRun ? null : randomUUID();
 
+    // Rows whose write failed. One bad row must not block the rest, and the
+    // report must say exactly which rows did not land so the admin can retry
+    // those instead of guessing which half of the file applied.
+    const applyFailures: { id: number; name: string; reason: string }[] = [];
+
     if (!isDryRun) {
       // Per-row atomicity: qty update + Adjustment record commit together.
       // Deliberately NO low-stock emails here — the admin is the alert
@@ -211,32 +216,44 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       // same products without a 50-email storm.
       const noteById = new Map(parsed.map((p) => [p.id, p.note]));
       for (const c of changes) {
-        await prisma.$transaction([
-          prisma.product.update({
-            where: { id: c.id },
-            data: { currentQty: c.newQty },
-          }),
-          prisma.adjustment.create({
-            data: {
-              productId: c.id,
-              adminId,
-              delta: c.delta,
-              qtyBefore: c.qtyBefore,
-              qtyAfter: c.newQty,
-              reason: noteById.get(c.id) ?? null,
-              batchId: batchId!,
-            },
-          }),
-        ]);
+        try {
+          await prisma.$transaction([
+            prisma.product.update({
+              where: { id: c.id },
+              data: { currentQty: c.newQty },
+            }),
+            prisma.adjustment.create({
+              data: {
+                productId: c.id,
+                adminId,
+                delta: c.delta,
+                qtyBefore: c.qtyBefore,
+                qtyAfter: c.newQty,
+                reason: noteById.get(c.id) ?? null,
+                batchId: batchId!,
+              },
+            }),
+          ]);
+        } catch (err) {
+          console.error(`[Adjustments] Row for product ${c.id} (${c.name}) failed to apply:`, err);
+          applyFailures.push({
+            id: c.id,
+            name: c.name,
+            reason: "Database write failed; this row was not applied",
+          });
+        }
       }
     }
+
+    const failedIds = new Set(applyFailures.map((f) => f.id));
+    const applied = changes.filter((c) => !failedIds.has(c.id));
 
     res.status(isDryRun ? 200 : 201).json({
       success: true,
       data: {
         dryRun: isDryRun,
         batchId,
-        applied: changes.map((c) => ({
+        applied: applied.map((c) => ({
           id: c.id,
           name: c.name,
           qtyBefore: c.qtyBefore,
@@ -246,15 +263,17 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
           belowThreshold: c.belowThreshold,
         })),
         skipped,
+        applyFailures,
         summary: {
-          changes: changes.length,
+          changes: applied.length,
           unchanged,
-          added: changes.filter((c) => c.delta > 0).reduce((s, c) => s + c.delta, 0),
-          removed: changes.filter((c) => c.delta < 0).reduce((s, c) => s - c.delta, 0),
-          zeroed: changes.filter((c) => c.newQty === 0).length,
-          conflicts: changes.filter((c) => c.conflict).length,
-          belowThreshold: changes.filter((c) => c.belowThreshold).length,
+          added: applied.filter((c) => c.delta > 0).reduce((s, c) => s + c.delta, 0),
+          removed: applied.filter((c) => c.delta < 0).reduce((s, c) => s - c.delta, 0),
+          zeroed: applied.filter((c) => c.newQty === 0).length,
+          conflicts: applied.filter((c) => c.conflict).length,
+          belowThreshold: applied.filter((c) => c.belowThreshold).length,
           errors: skipped.length,
+          failed: applyFailures.length,
         },
       },
     });

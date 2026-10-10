@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.js";
 import teamMembersRoutes from "./routes/teamMembers.js";
@@ -54,6 +54,32 @@ app.use("/api/v1/thresholds", thresholdsRoutes);
 // ─── Health check ───────────────────────────────────────────────────
 app.get("/api/v1/health", (_req, res) => {
   res.json({ success: true, data: { status: "ok" } });
+});
+
+// ─── Fallbacks: keep the JSON envelope off the happy path ────────────
+// Without these an unknown path or a malformed JSON body came back as an
+// Express HTML page, which the clients then failed to JSON-parse.
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ success: false, data: null, error: "Not found" });
+});
+
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const e = err as { type?: string; status?: number; statusCode?: number };
+  if (e?.type === "entity.parse.failed") {
+    res.status(400).json({ success: false, data: null, error: "Malformed JSON body" });
+    return;
+  }
+  if (e?.type === "entity.too.large") {
+    res.status(413).json({ success: false, data: null, error: "Request body too large" });
+    return;
+  }
+  const status = e?.status ?? e?.statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    res.status(status).json({ success: false, data: null, error: "Bad request" });
+    return;
+  }
+  console.error("Unhandled error:", err);
+  res.status(500).json({ success: false, data: null, error: "Internal server error" });
 });
 
 export default app;

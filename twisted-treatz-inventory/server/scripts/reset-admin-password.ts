@@ -38,10 +38,16 @@ async function main() {
 
   await prisma.admin.update({
     where: { id: admin.id },
-    data: { passwordHash: await bcrypt.hash(newPassword, 12) },
+    data: {
+      passwordHash: await bcrypt.hash(newPassword, 12),
+      // Session-revocation invariant: every outstanding admin JWT carries the
+      // old tokenVersion and is rejected from here on (same as the in-app
+      // change-password and reset-password routes).
+      tokenVersion: { increment: 1 },
+    },
   });
 
-  console.log(`\nPassword reset for ${email}.`);
+  console.log(`\nPassword reset for ${email}. All existing sessions for this admin are signed out.`);
   console.log(`New password: ${newPassword}`);
   console.log("Save it now — it is not stored anywhere else.\n");
 }

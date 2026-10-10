@@ -61,8 +61,8 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 
 ## Alert Rules
 - Email fires when a floor removal leaves a product AT OR BELOW its threshold (`server/src/services/alertService.ts`, called only from the removals route). Admin bulk updates and threshold imports never email but flag low stock (`belowThreshold`) in their result summary; catalog imports neither email nor flag it
-- Sent to the `ALERT_TO_EMAIL` address from `ALERT_FROM_EMAIL` (env vars, not the Admin row's email). If `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` or `ALERT_TO_EMAIL` is unset, nothing is emailed but the AlertLog row is still written
-- One alert per product per calendar day (UTC day boundaries), enforced via `AlertLog`
+- Sent to the `ALERT_TO_EMAIL` address from `ALERT_FROM_EMAIL` (env vars, not the Admin row's email). If `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` or `ALERT_TO_EMAIL` is unset, nothing is emailed: a `[AlertService] Low stock NOT emailed` warning is logged and no AlertLog row is written, so the next removal tries again
+- One alert per product per America/Chicago calendar day (`server/src/lib/businessDay.ts`), enforced via `AlertLog`
 - SendGrid for delivery
 
 ## Invariants — every change is checked against these
@@ -78,12 +78,13 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 - `JWT_SECRET` must be set in production — the server refuses to boot without it
 - Admin emails must be exactly `@twistedtreatz.com` (no subdomains/lookalikes): any writer of an admin email must call `isAllowedAdminEmail` from `server/src/lib/adminEmailPolicy.ts` (today only the seed script writes one)
 - Browser CORS is pinned: prod frontend origin + localhost in dev (`CORS_EXTRA_ORIGINS` env var for anything else)
-- Alerts fire at-or-below threshold on floor removals, max once per product per calendar day (UTC day boundaries)
+- Alerts fire at-or-below threshold on floor removals, max once per product per America/Chicago calendar day
 
 ## Testing — run before claiming anything works
 - `cd server && npm test` — vitest + supertest suite in `server/tests/` (auth matrix, login flows, stock math, alert rules). Prisma is mocked via the shared client in `server/src/lib/prisma.ts` — always import `prisma` from there, never `new PrismaClient()`
 - `cd server && npx tsc --noEmit` — server types
 - `cd client && npm run build` — client types + build
+- `cd client && npm run lint` — ESLint with the react-hooks v7 rules; must exit 0
 - New invariant-touching code needs a test in `server/tests/` before it ships
 
 ## Agent roster
@@ -101,7 +102,7 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 - All API routes prefixed with /api/v1/
 - All responses: { success: boolean, data: any, error?: string }
 - Never expose PIN hashes or password hashes in API responses
-- All timestamps stored as UTC in DB, displayed in America/Chicago timezone
+- All timestamps stored as UTC in DB, displayed in America/Chicago timezone; day boundaries (alert dedupe, "removed today", date-range filters) are America/Chicago calendar days via `server/src/lib/businessDay.ts`
 
 ## iPad-Specific Rules
 - All interactive elements minimum 48px tall
@@ -148,7 +149,7 @@ twisted-treatz-inventory/
 - The original catalogue is `data/raw_materials.csv` (203 data rows, two duplicate names), loaded by `server/prisma/seed.ts`. The spreadsheet it was exported from is not in the repo, and the live catalogue has since grown well past it (Hani's sheet import, 2026-06-29)
 - CSV categories: Raw material (one row is spelled "Raw Material" and seeds as a separate category), Gummy, Jelly Beans, Jelly, Caramel Chews, Sour Candy, Swedish Bubs, Candy Corn, Sweet Candy, Hard Candy, Spicy Candy, Grocery
 - The CSV has no supplier column; `supplier` is seeded null and filled in by admins later
-- `npm run db:seed` DELETES every receipt, removal, alert log, product and brand before inserting, and on a database that already has Adjustment rows it aborts partway (the product delete hits the Adjustment foreign key after the movement history is already gone). Never run it against the shared production database (local `server/.env` points there)
+- `npm run db:seed` DELETES every receipt, removal, adjustment, alert log, product and brand (in one transaction) before inserting. It refuses to run with `NODE_ENV=production` or unless `SEED_ALLOW_WIPE` equals the `DATABASE_URL` host, so you must name the database you are wiping. Never point it at the shared production database (local `server/.env` points there)
 
 ## Original build order (historical — every step below is done)
 1. Database schema + Prisma setup

@@ -97,6 +97,17 @@ async function adminFetch<T>(
     },
   });
 
+  // The API always answers with the JSON envelope; anything else means the
+  // request never reached it (proxy 502, wrong URL), so say that instead of
+  // surfacing a JSON parse error.
+  if (!(res.headers.get("content-type") ?? "").includes("application/json")) {
+    throw new Error(
+      res.ok
+        ? "Unexpected non-JSON response from the inventory API"
+        : `The inventory API did not respond (HTTP ${res.status}). Check that the server is running.`,
+    );
+  }
+
   const json: ApiResponse<T> = await res.json();
 
   if (!json.success) {
@@ -393,6 +404,13 @@ export interface AdjustmentImportSummary {
   conflicts: number;
   belowThreshold: number;
   errors: number;
+  failed: number; // rows whose database write failed (listed in applyFailures)
+}
+
+export interface ImportApplyFailure {
+  id: number;
+  name: string;
+  reason: string;
 }
 
 export interface AdjustmentImportResult {
@@ -400,6 +418,7 @@ export interface AdjustmentImportResult {
   batchId: string | null;
   applied: AdjustmentAppliedRow[];
   skipped: AdjustmentSkippedRow[];
+  applyFailures: ImportApplyFailure[];
   summary: AdjustmentImportSummary;
 }
 
@@ -456,12 +475,14 @@ export interface ThresholdImportSummary {
   zeroed: number; // thresholds set to 0 → low-stock alerts disabled
   belowThreshold: number;
   errors: number;
+  failed: number; // rows whose database write failed (listed in applyFailures)
 }
 
 export interface ThresholdImportResult {
   dryRun: boolean;
   applied: ThresholdAppliedRow[];
   skipped: ThresholdSkippedRow[];
+  applyFailures: ImportApplyFailure[];
   summary: ThresholdImportSummary;
 }
 

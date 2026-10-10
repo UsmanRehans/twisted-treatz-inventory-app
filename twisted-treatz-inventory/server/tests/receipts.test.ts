@@ -54,9 +54,10 @@ describe("POST /api/v1/receipts — stock math", () => {
     const res = await receive({ productId: 7, expectedQty: 10, actualQty: 12, supplier: "Sam's Club" });
 
     expect(res.status).toBe(201);
-    // 4 on hand + 12 actually counted = 16, regardless of the PO saying 10
+    // Adds the 12 actually counted, regardless of the PO saying 10, as a
+    // database-side increment (no stale read-then-write)
     expect(mockPrisma.product.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { currentQty: 16 } })
+      expect.objectContaining({ where: { id: 7 }, data: { currentQty: { increment: 12 } } })
     );
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
     // ...and that transaction carries both the qty update and the receipt row

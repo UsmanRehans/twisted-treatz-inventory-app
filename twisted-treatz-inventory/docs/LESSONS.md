@@ -4,27 +4,31 @@ Things learned about this repo that were not written down anywhere. One lesson p
 
 ## Production has never been able to send email
 SendGrid has never been configured on the Railway backend, so low-stock alerts and password-reset emails have never gone out, while the app behaves as if they had.
-`SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` and `ALERT_TO_EMAIL` exist on Railway as empty strings (checked 2026-10-09). `alertService` still writes the `AlertLog` row and logs `Low stock alert sent` after skipping the send, so neither the logs nor the dedupe table tell you emails are off. Check the boot lines `Email alerts are disabled` / `Reset emails are disabled` in `railway logs` before trusting any alert claim.
+`SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` and `ALERT_TO_EMAIL` exist on Railway as empty strings (checked 2026-10-09). Until the 2026-10 fixes `alertService` wrote the `AlertLog` row and logged `Low stock alert sent` even when it skipped the send, so neither the logs nor the dedupe table showed that mail was off; it now logs `Low stock NOT emailed` and records nothing, and the forgot-password route answers 503. Check the boot lines `Email alerts are disabled` / `Reset emails are disabled` in `railway logs` before trusting any alert claim.
 
 ## `npm run db:seed` is a wipe, and local `.env` is production
-The seed deletes every receipt, removal, alert log, product and brand before inserting, and the only thing that stops it finishing against production is the `Adjustment.productId` RESTRICT foreign key.
-Because there is no transaction, receipts/removals/alert logs are already gone when it aborts. Treat the seed as a destructive command: point `DATABASE_URL` at a throwaway database first. (AUDIT.md finding 2.)
+The seed deletes the whole catalogue and all movement history before inserting; until 2026-10 nothing stopped it running against production except the `Adjustment.productId` RESTRICT foreign key, which fired after receipts/removals/alert logs were already gone.
+It now refuses to run with `NODE_ENV=production` or unless `SEED_ALLOW_WIPE` equals the `DATABASE_URL` host, and deletes in one transaction. Still treat it as destructive: point `DATABASE_URL` at a throwaway database first. (AUDIT.md finding 2.)
 
 ## `.claude/` is ignored by the developer's global gitignore
 Files under `twisted-treatz-inventory/.claude/` only reach the repo with `git add -f`; new agent or command files silently stay local.
 This is why CLAUDE.md referred to "retired blueprint" agents and `/ipad-check`, `/status` commands that a fresh clone does not have. The tracked set is six agents and eight commands; check `git ls-files twisted-treatz-inventory/.claude` before pointing anyone at a file there.
 
-## Client lint has been red since the first commit
-`eslint-plugin-react-hooks` v7's recommended config (`set-state-in-effect`, `rules-of-hooks`) has been on since `13da445`, and `npm run lint` has never exited 0.
-`npm run build` (`tsc -b && vite build`) is the gate that actually protects the client. Until the six remaining errors are fixed, a new lint error is invisible in the noise; look at the count, not the exit code.
+## Client lint was red from the first commit until 2026-10
+`eslint-plugin-react-hooks` v7's recommended config (`set-state-in-effect`, `rules-of-hooks`, `set-state-in-render`) has been on since `13da445`, and `npm run lint` never exited 0 until the audit fixes.
+It is now part of the pre-merge checks in CLAUDE.md. The v7 rules reject `setState` directly inside an effect body; the fixes used derived state (a "loaded for key" value instead of a `loading` flag), render-time prop comparison (PinPad) and initializer-based reads (useAdminAuth). Reach for those patterns rather than disabling the rule.
+
+## Verify against a throwaway Postgres, never the shared one
+Docker is on the dev machine, so the full stack can be exercised locally in a few minutes: `docker run -d --name tt-pg -e POSTGRES_USER=x -e POSTGRES_PASSWORD=y -e POSTGRES_DB=tt -p 55432:5432 postgres:16-alpine`, then in `server/` with `DATABASE_URL=postgresql://x:y@localhost:55432/tt` run `npx prisma migrate deploy` and `SEED_ALLOW_WIPE=localhost NODE_ENV=development SEED_ADMIN_EMAIL=... SEED_ADMIN_PASSWORD=... npx prisma db seed`, start the API with `JWT_SECRET` set and `npx tsx watch src/index.ts`, and run the client with `npm run dev` (its proxy targets port 3001).
+This is how the audit fixes were verified (concurrent removals, Chicago "today", login/logout, floor PIN flow) without `.env` ever pointing at production. The seed prints temporary PINs for the six members; `scripts/reset-admin-password.ts` sets a known admin password.
 
 ## Production starts the server from `railway.json`, not `npm start`
 `railway.json` `startCommand` and `Procfile` run `node dist/src/index.js`; `npm start` pointed at a non-existent `dist/index.js` for months without anyone noticing.
 `tsc` emits under `dist/src/` because `tsconfig.json` has `rootDir: "."` and also compiles `prisma/`. Fixed in the audit PR, but if the three ever disagree again, Railway's file is the one that matters.
 
-## "Today" in the API is a UTC day; only display is Chicago
-Alert dedupe, the dashboard's "removed today" and every date-range filter use `setUTCHours` boundaries, so the business day rolls over at 7 pm CDT / 6 pm CST.
-Timestamps are stored UTC and formatted in `America/Chicago` on the client and in emails, which hides this. Any "per day" promise in docs means UTC day unless the five window computations are changed together.
+## Day boundaries are Chicago calendar days, computed in one place
+Until 2026-10 alert dedupe, the dashboard's "removed today" and every date-range filter used `setUTCHours`, so the business day rolled over at 7 pm CDT / 6 pm CST while the UI formatted everything in Chicago time and hid it.
+All five call sites now go through `server/src/lib/businessDay.ts` (`chicagoDayBounds`, `parseChicagoDate`), whose tests pin the two daylight-saving days. Add any new "per day" logic there, not inline.
 
 ## The Prisma mock cannot prove rollback
 `tests/helpers/mockPrisma.ts` implements `$transaction` as `Promise.all(ops)`, and every mocked write resolves when called, before the "transaction" runs.

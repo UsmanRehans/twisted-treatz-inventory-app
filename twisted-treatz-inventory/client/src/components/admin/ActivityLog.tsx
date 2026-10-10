@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   fetchActivity,
   fetchAdminTeamMembers,
@@ -50,7 +50,8 @@ export default function ActivityLog({ token }: ActivityLogProps) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  // Loading is derived: true until data for the current filters/page arrived.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   // Filters
   const [type, setType] = useState<ActivityType | "all">("all");
@@ -64,14 +65,32 @@ export default function ActivityLog({ token }: ActivityLogProps) {
   const [categories, setCategories] = useState<string[]>([]);
 
   const limit = 50;
+  const requestKey = JSON.stringify({ token, type, memberId, category, startDate, endDate, page });
+  const loading = loadedFor !== requestKey;
+
+  // Changing a filter restarts at page 1 — done in the handlers, not an effect
+  function withPageReset<T>(set: (value: T) => void) {
+    return (value: T) => {
+      set(value);
+      setPage(1);
+    };
+  }
+  const changeType = withPageReset(setType);
+  const changeMemberId = withPageReset(setMemberId);
+  const changeCategory = withPageReset(setCategory);
+  const changeStartDate = withPageReset(setStartDate);
+  const changeEndDate = withPageReset(setEndDate);
 
   useEffect(() => {
     fetchAdminTeamMembers(token).then(setMembers).catch(console.error);
     fetchAdminCategories(token).then(setCategories).catch(console.error);
   }, [token]);
 
-  const loadActivity = useCallback(() => {
-    setLoading(true);
+  useEffect(() => {
+    // Ignore a reply that arrives after the filters/page changed again, so an
+    // out-of-order response can neither overwrite newer rows nor leave the
+    // spinner stuck on a key that no longer matches.
+    let stale = false;
     fetchActivity(token, {
       type,
       memberId,
@@ -82,21 +101,18 @@ export default function ActivityLog({ token }: ActivityLogProps) {
       limit,
     })
       .then((data) => {
+        if (stale) return;
         setEvents(data.events);
         setTotal(data.total);
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token, type, page, memberId, category, startDate, endDate]);
-
-  useEffect(() => {
-    loadActivity();
-  }, [loadActivity]);
-
-  // Reset to page 1 on filter change
-  useEffect(() => {
-    setPage(1);
-  }, [type, memberId, category, startDate, endDate]);
+      .finally(() => {
+        if (!stale) setLoadedFor(requestKey);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [token, type, page, memberId, category, startDate, endDate, requestKey]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -144,7 +160,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
           <label className="block text-xs text-gray-500 mb-1">Type</label>
           <select
             value={type}
-            onChange={(e) => setType(e.target.value as ActivityType | "all")}
+            onChange={(e) => changeType(e.target.value as ActivityType | "all")}
             className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           >
             <option value="all">All Activity</option>
@@ -158,7 +174,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
           <select
             value={memberId ?? ""}
             onChange={(e) =>
-              setMemberId(e.target.value ? Number(e.target.value) : undefined)
+              changeMemberId(e.target.value ? Number(e.target.value) : undefined)
             }
             className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           >
@@ -174,7 +190,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
           <label className="block text-xs text-gray-500 mb-1">Category</label>
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => changeCategory(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           >
             <option value="">All Categories</option>
@@ -190,7 +206,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => changeStartDate(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           />
         </div>
@@ -199,7 +215,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => changeEndDate(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           />
         </div>

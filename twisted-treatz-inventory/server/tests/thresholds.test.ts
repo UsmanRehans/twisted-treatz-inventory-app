@@ -113,6 +113,21 @@ describe("POST /api/v1/thresholds/import — apply", () => {
     expect(res.body.data.summary).toMatchObject({ changes: 2, raised: 2, lowered: 0 });
   });
 
+  it("reports a row whose write failed and still applies the rest", async () => {
+    mockPrisma.product.update.mockRejectedValueOnce(new Error("db hiccup"));
+    const res = await importRows({
+      rows: [
+        { id: 7, newThreshold: 3 },
+        { id: 8, newThreshold: 50 },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.product.update).toHaveBeenCalledTimes(2); // second row still attempted
+    expect(res.body.data.applyFailures).toEqual([expect.objectContaining({ id: 7 })]);
+    expect(res.body.data.applied.map((r: { id: number }) => r.id)).toEqual([8]);
+    expect(res.body.data.summary).toMatchObject({ changes: 1, failed: 1 });
+  });
+
   it("counts raised vs lowered relative to the live threshold", async () => {
     // id 7 threshold 10 → 3 (lowered); id 8 threshold 10 → 40 (raised)
     const res = await importRows({ rows: [{ id: 7, newThreshold: 3 }, { id: 8, newThreshold: 40 }] });

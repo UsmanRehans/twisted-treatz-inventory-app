@@ -18,12 +18,13 @@ function formatDate(dateStr: string | null): string {
 
 export default function StatCards({ token }: StatCardsProps) {
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Loading is derived: true until stats for the current token have arrived.
+  const [loadedForToken, setLoadedForToken] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const loading = loadedForToken !== token;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     fetchAdminStats(token)
       .then((data) => {
         if (!cancelled) setStats(data);
@@ -32,7 +33,7 @@ export default function StatCards({ token }: StatCardsProps) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load stats");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadedForToken(token);
       });
     return () => { cancelled = true; };
   }, [token]);

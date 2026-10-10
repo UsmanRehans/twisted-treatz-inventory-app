@@ -1,10 +1,8 @@
 import { useState, lazy, Suspense } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAdminAuth } from "../hooks/useAdminAuth";
-import AdminSidebar, {
-  ADMIN_TABS,
-  type AdminTab,
-} from "../components/admin/AdminSidebar";
+import AdminSidebar from "../components/admin/AdminSidebar";
+import { ADMIN_TABS, type AdminTab } from "../components/admin/adminTabs";
 import StatCards from "../components/admin/StatCards";
 import ProductTable from "../components/admin/ProductTable";
 import StockHealth from "../components/admin/StockHealth";
