@@ -111,7 +111,7 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 - Screen auto-resets to member selection after 30 seconds of inactivity
 
 ## File Structure
-The git repository root holds only README.md and this `twisted-treatz-inventory/` folder.
+The git repository root holds README.md, AUDIT.md (the 2026-10-09 audit), .gitignore and this `twisted-treatz-inventory/` folder.
 ```
 twisted-treatz-inventory/
 ├── CLAUDE.md                      ← you are here
@@ -141,7 +141,7 @@ twisted-treatz-inventory/
 │   ├── scripts/                   ← one-off operational scripts (see docs/)
 │   └── tests/                     ← vitest + supertest suite
 ├── data/raw_materials.csv         ← original catalogue used by the seed
-└── docs/                          ← runbooks and the original kickoff prompt
+└── docs/                          ← runbooks, LESSONS.md and the original kickoff prompt
 ```
 
 ## Seed Data
