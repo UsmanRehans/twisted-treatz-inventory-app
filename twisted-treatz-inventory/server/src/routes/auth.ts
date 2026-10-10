@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { generateAdminToken, generateTeamMemberToken } from "../services/tokenService.js";
 import { requireAdmin, AdminRequest } from "../middleware/requireAdmin.js";
-import { sendPasswordResetEmail } from "../services/passwordResetService.js";
+import { sendPasswordResetEmail, isResetEmailConfigured } from "../services/passwordResetService.js";
 
 const router = Router();
 
@@ -337,6 +337,20 @@ router.post("/admin/request-reset", async (req: Request, res: Response) => {
         success: false,
         data: null,
         error: "Email is required",
+      });
+      return;
+    }
+
+    // Mail is a hard dependency of this flow. Rather than claim "a link has
+    // been sent" when nothing can be sent (which is what production did for
+    // months), say so — identically for every email, so it reveals nothing
+    // about which accounts exist.
+    if (!isResetEmailConfigured()) {
+      res.status(503).json({
+        success: false,
+        data: null,
+        error:
+          "Password reset email is not configured on this server. Ask the owner to reset your password.",
       });
       return;
     }

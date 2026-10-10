@@ -32,6 +32,11 @@ if (!process.env.APP_BASE_URL) {
   );
 }
 
+/** True when SendGrid is configured well enough for a reset email to go out. */
+export function isResetEmailConfigured(): boolean {
+  return sendgridReady && Boolean(ALERT_FROM_EMAIL);
+}
+
 /**
  * Emails a reset link to the admin. The raw token goes in the link only —
  * the DB stores its SHA-256 hash.
