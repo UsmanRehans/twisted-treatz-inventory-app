@@ -12,6 +12,11 @@ window** (off-hours; ~10 min for a 7-person internal tool).
 > would apply it right after Migration A, before the backfill runs. Create it
 > as a migration only after backfill verification passes (step 7).
 
+> **Status:** steps 0–6 have been applied to production (the Brand table is
+> live and backfilled; see PRODUCT_EDIT_DEACTIVATE_RUNBOOK.md). Only step 7
+> — dropping `brandText` — is outstanding: the column is still declared in
+> `server/prisma/schema.prisma` and no drop migration has been created.
+
 ## Ordered steps
 
 | # | Action | Verify before proceeding |
