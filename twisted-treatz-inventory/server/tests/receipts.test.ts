@@ -35,7 +35,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Backs the middleware's tokenVersion check
   mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findUnique.mockResolvedValue(sourPatch);
   mockPrisma.product.update.mockResolvedValue({ ...sourPatch, currentQty: 16 });
   mockPrisma.receipt.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>

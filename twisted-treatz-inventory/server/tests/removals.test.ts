@@ -28,7 +28,6 @@ const gummyBears = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findUnique.mockResolvedValue(gummyBears);
   mockPrisma.product.update.mockResolvedValue({ ...gummyBears, currentQty: 15 });
   mockPrisma.removal.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>

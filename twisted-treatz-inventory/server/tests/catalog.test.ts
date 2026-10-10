@@ -47,7 +47,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   createdId = 1000;
   mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findMany.mockResolvedValue(existingProducts);
   mockPrisma.brand.findMany.mockResolvedValue([{ id: 5, name: "Boston" }]);
   mockPrisma.product.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>

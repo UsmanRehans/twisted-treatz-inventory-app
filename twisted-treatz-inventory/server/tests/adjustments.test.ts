@@ -39,7 +39,6 @@ const products = [
 beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findMany.mockResolvedValue(products);
   mockPrisma.product.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ ...data }),
