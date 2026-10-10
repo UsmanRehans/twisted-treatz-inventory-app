@@ -3,13 +3,13 @@
 ## Project Overview
 Internal inventory management system for a candy distribution/manufacturing company in Houston, TX.
 This is NOT a storefront. No customer-facing pages. No Shopify. No checkout.
-This is a private tool used exclusively by the owner and a small floor team (3 active members as of 2026-10-09).
+This is a private tool used exclusively by the owner and a small floor team.
 
 ## Business Context
 - Company: Twisted Treatz (twistedtreatz.com)
 - Location: Houston, TX
 - Products: 200+ candy/ingredient SKUs across categories: Raw Materials, Gummy, Jelly Beans, Caramel Chews, Swedish Bubs, Sour Candy, Hard Candy, Candy Corn, etc.
-- Team: 1 master admin (owner) + a small floor team (3 active members as of 2026-10-09)
+- Team: 1 master admin (owner) + a small floor team (accounts managed from the admin dashboard)
 
 ## Three Screens — Never Confuse Them
 
