@@ -67,13 +67,6 @@ export interface RemovalRecord {
   createdAt: string;
 }
 
-export interface RemovalsResponse {
-  removals: RemovalRecord[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
 interface ApiResponse<T> {
   success: boolean;
   data: T;
