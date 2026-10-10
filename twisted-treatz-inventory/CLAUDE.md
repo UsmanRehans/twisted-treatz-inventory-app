@@ -84,6 +84,7 @@ Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and colu
 - `cd server && npm test` — vitest + supertest suite in `server/tests/` (auth matrix, login flows, stock math, alert rules). Prisma is mocked via the shared client in `server/src/lib/prisma.ts` — always import `prisma` from there, never `new PrismaClient()`
 - `cd server && npx tsc --noEmit` — server types
 - `cd client && npm run build` — client types + build
+- `cd client && npm run lint` — ESLint with the react-hooks v7 rules; must exit 0
 - New invariant-touching code needs a test in `server/tests/` before it ships
 
 ## Agent roster
