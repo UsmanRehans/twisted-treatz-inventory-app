@@ -74,17 +74,6 @@ export interface RemovalsResponse {
   limit: number;
 }
 
-export interface RemovalFilters {
-  memberId?: number;
-  category?: string;
-  startDate?: string;
-  endDate?: string;
-  page?: number;
-  limit?: number;
-  sort?: string;
-  order?: string;
-}
-
 interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -649,28 +638,6 @@ export async function fetchActivity(
   const qs = params.toString();
   return adminFetch<ActivityResponse>(
     `/api/v1/admin/activity${qs ? `?${qs}` : ""}`,
-    token
-  );
-}
-
-// ─── Removals (Activity Log) ──────────────────────────────────────
-
-export async function fetchRemovals(
-  token: string,
-  filters?: RemovalFilters
-): Promise<RemovalsResponse> {
-  const params = new URLSearchParams();
-  if (filters?.memberId) params.set("memberId", String(filters.memberId));
-  if (filters?.category) params.set("category", filters.category);
-  if (filters?.startDate) params.set("startDate", filters.startDate);
-  if (filters?.endDate) params.set("endDate", filters.endDate);
-  if (filters?.page) params.set("page", String(filters.page));
-  if (filters?.limit) params.set("limit", String(filters.limit));
-  if (filters?.sort) params.set("sort", filters.sort);
-  if (filters?.order) params.set("order", filters.order);
-  const qs = params.toString();
-  return adminFetch<RemovalsResponse>(
-    `/api/v1/removals${qs ? `?${qs}` : ""}`,
     token
   );
 }
