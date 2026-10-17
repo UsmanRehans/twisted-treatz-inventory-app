@@ -1,5 +1,6 @@
 // ─── Receiving stock math ───────────────────────────────────────────
-// Receipts are the ONLY way stock increases. Increments must be exact
+// Receipts are the only way a SHIPMENT adds stock (admin Adjustments and
+// catalog imports can also raise currentQty). Increments must be exact
 // and validation must catch bad quantities before any write.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -34,7 +35,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Backs the middleware's tokenVersion check
   mockPrisma.admin.findUnique.mockResolvedValue({ id: 1, tokenVersion: 0 });
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findUnique.mockResolvedValue(sourPatch);
   mockPrisma.product.update.mockResolvedValue({ ...sourPatch, currentQty: 16 });
   mockPrisma.receipt.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
@@ -59,6 +59,8 @@ describe("POST /api/v1/receipts — stock math", () => {
       expect.objectContaining({ data: { currentQty: 16 } })
     );
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    // ...and that transaction carries both the qty update and the receipt row
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
   });
 
   it("records both expected and actual so discrepancies are auditable", async () => {

@@ -65,7 +65,6 @@ beforeEach(() => {
   mockPrisma.receipt.count.mockResolvedValue(0);
   mockPrisma.removal.findMany.mockResolvedValue([]);
   mockPrisma.removal.count.mockResolvedValue(0);
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
 });
 
 describe("tokenVersion enforcement", () => {

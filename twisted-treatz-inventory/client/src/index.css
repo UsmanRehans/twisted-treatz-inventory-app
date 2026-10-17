@@ -59,11 +59,6 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
-/* Smooth scrolling for category tabs */
-.scroll-smooth {
-  -webkit-overflow-scrolling: touch;
-}
-
 /* Hide scrollbar for category tabs */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;

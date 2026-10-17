@@ -5,11 +5,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockPrisma } from "./helpers/mockPrisma.js";
 
+// alertService reads the SendGrid config at module load and silently skips
+// sending when it is missing — stub the env before any import runs so the
+// email assertions below exercise the real send path.
+vi.hoisted(() => {
+  process.env.SENDGRID_API_KEY = "test-sendgrid-key";
+  process.env.ALERT_FROM_EMAIL = "alerts@twistedtreatz.com";
+  process.env.ALERT_TO_EMAIL = "owner@twistedtreatz.com";
+});
+
 vi.mock("../src/lib/prisma.js", () => ({ prisma: createMockPrisma() }));
 vi.mock("@sendgrid/mail", () => ({
   default: { setApiKey: vi.fn(), send: vi.fn() },
 }));
 
+import sgMail from "@sendgrid/mail";
 import { checkAndSendAlert } from "../src/services/alertService.js";
 import { prisma } from "../src/lib/prisma.js";
 import type { MockPrisma } from "./helpers/mockPrisma.js";
@@ -54,6 +64,37 @@ describe("checkAndSendAlert", () => {
     expect(mockPrisma.alertLog.create).toHaveBeenCalled();
   });
 
+  it("emails ALERT_TO_EMAIL from ALERT_FROM_EMAIL via SendGrid, naming the product", async () => {
+    mockPrisma.product.findUnique.mockResolvedValue(productAt(2, 10));
+    mockPrisma.alertLog.findFirst.mockResolvedValue(null);
+    await checkAndSendAlert(1, removalInfo);
+
+    expect(sgMail.send).toHaveBeenCalledTimes(1);
+    const msg = vi.mocked(sgMail.send).mock.calls[0][0] as {
+      to: string;
+      from: string;
+      subject: string;
+      html: string;
+    };
+    expect(msg.to).toBe("owner@twistedtreatz.com");
+    expect(msg.from).toBe("alerts@twistedtreatz.com");
+    expect(msg.subject).toContain("Candy Corn Bulk");
+    expect(msg.html).toContain("Candy Corn Bulk");
+  });
+
+  it("sends no email while stock is above the threshold", async () => {
+    mockPrisma.product.findUnique.mockResolvedValue(productAt(11, 10));
+    await checkAndSendAlert(1, removalInfo);
+    expect(sgMail.send).not.toHaveBeenCalled();
+  });
+
+  it("sends no second email for the same product on the same day", async () => {
+    mockPrisma.product.findUnique.mockResolvedValue(productAt(2, 10));
+    mockPrisma.alertLog.findFirst.mockResolvedValue({ id: 99, productId: 1, sentAt: new Date() });
+    await checkAndSendAlert(1, removalInfo);
+    expect(sgMail.send).not.toHaveBeenCalled();
+  });
+
   it("suppresses a second alert for the same product on the same day", async () => {
     mockPrisma.product.findUnique.mockResolvedValue(productAt(2, 10));
     mockPrisma.alertLog.findFirst.mockResolvedValue({
@@ -65,15 +106,21 @@ describe("checkAndSendAlert", () => {
     expect(mockPrisma.alertLog.create).not.toHaveBeenCalled();
   });
 
-  it("checks today's window when looking for prior alerts", async () => {
-    mockPrisma.product.findUnique.mockResolvedValue(productAt(2, 10));
-    mockPrisma.alertLog.findFirst.mockResolvedValue(null);
-    await checkAndSendAlert(1, removalInfo);
+  it("checks today's UTC day window when looking for prior alerts", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-09T20:30:00.000Z"));
+    try {
+      mockPrisma.product.findUnique.mockResolvedValue(productAt(2, 10));
+      mockPrisma.alertLog.findFirst.mockResolvedValue(null);
+      await checkAndSendAlert(1, removalInfo);
 
-    const query = mockPrisma.alertLog.findFirst.mock.calls[0][0];
-    expect(query.where.productId).toBe(1);
-    expect(query.where.sentAt.gte).toBeInstanceOf(Date);
-    expect(query.where.sentAt.lte).toBeInstanceOf(Date);
+      const query = mockPrisma.alertLog.findFirst.mock.calls[0][0];
+      expect(query.where.productId).toBe(1);
+      expect(query.where.sentAt.gte.toISOString()).toBe("2026-10-09T00:00:00.000Z");
+      expect(query.where.sentAt.lte.toISOString()).toBe("2026-10-09T23:59:59.999Z");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("never throws, even when the database call fails", async () => {

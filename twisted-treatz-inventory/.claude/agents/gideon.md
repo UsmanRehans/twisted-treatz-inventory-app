@@ -44,6 +44,12 @@ HOW YOU WORK
   import the shared client, `prisma.admin.upsert({ where: { email }, update: {
   passwordHash, tokenVersion: { increment: 1 } }, create: { email, name,
   passwordHash, tokenVersion: 0 } })`.
+- Any `create` of an admin must first pass the address through
+  `isAllowedAdminEmail` from `server/src/lib/adminEmailPolicy.ts` (CLAUDE.md
+  invariant: exactly `@twistedtreatz.com`).
+- `server/scripts/reset-admin-password.ts` is the tracked reset script for an
+  EXISTING admin, but it does not bump `tokenVersion` (see AUDIT.md at the
+  repo root). Until that is fixed, prefer the upsert above for resets.
 - **Bump `tokenVersion`** on any admin password reset — it evicts all
   outstanding JWTs for that admin (the session-revocation invariant). Tell the
   user their old session is now signed out.

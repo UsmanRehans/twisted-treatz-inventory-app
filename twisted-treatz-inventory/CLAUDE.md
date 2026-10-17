@@ -3,13 +3,13 @@
 ## Project Overview
 Internal inventory management system for a candy distribution/manufacturing company in Houston, TX.
 This is NOT a storefront. No customer-facing pages. No Shopify. No checkout.
-This is a private tool used exclusively by the owner and 6 team members.
+This is a private tool used exclusively by the owner and a small floor team.
 
 ## Business Context
 - Company: Twisted Treatz (twistedtreatz.com)
 - Location: Houston, TX
 - Products: 200+ candy/ingredient SKUs across categories: Raw Materials, Gummy, Jelly Beans, Caramel Chews, Swedish Bubs, Sour Candy, Hard Candy, Candy Corn, etc.
-- Team: 1 master admin (owner) + 6 floor team members
+- Team: 1 master admin (owner) + a small floor team (accounts managed from the admin dashboard)
 
 ## Three Screens — Never Confuse Them
 
@@ -25,7 +25,7 @@ This is a private tool used exclusively by the owner and 6 team members.
 - View all 200+ SKUs, current quantities, alert thresholds
 - Edit thresholds per product inline
 - View full activity log (who removed what, when)
-- Manage 6 team member accounts and PINs
+- Manage team member accounts and PINs
 - View category summary stats
 
 ### Screen 3: Receiving UI (`/admin/receive` route)
@@ -49,24 +49,28 @@ This is a private tool used exclusively by the owner and 6 team members.
 | Team Member | Screen 1 only | Name tap + 4-digit PIN |
 
 ## Database Key Tables
-- `products` — all SKUs with category, unit, brand, supplier, current_qty, alert_threshold
-- `users` — 6 team members with name, PIN hash, active flag
-- `admin` — single admin record with email, password hash
-- `removals` — log of every removal: user_id, product_id, qty, timestamp
-- `receipts` — log of every shipment received: product_id, expected_qty, actual_qty, supplier, admin_id, timestamp
+Source of truth is `server/prisma/schema.prisma`. Tables are PascalCase and columns camelCase (Prisma defaults), e.g. `"Product"."currentQty"` in raw SQL.
+- `Product` — every SKU: name, category, flavor, purchaseUnit, unitSize (legacy free text), packSize + uom, brandId → Brand (plus the transitional `brandText` column, still present), supplier, usedIn, currentQty, alertThreshold, unitPrice, active (soft delete), highRisk (visual label)
+- `Brand` — first-class brand: name (unique, normalized), active
+- `TeamMember` — floor team: name, initials, pinHash, active
+- `Admin` — one or more admins: email (unique, must be @twistedtreatz.com), passwordHash, name, resetTokenHash/resetTokenExpires, tokenVersion
+- `Removal` — every floor removal: productId, teamMemberId, qty, qtyBefore, qtyAfter, createdAt
+- `Receipt` — every shipment received: productId, adminId, supplier, expectedQty, actualQty, unitPrice, notes, createdAt
+- `Adjustment` — admin stock corrections (cycle count, bulk CSV, catalog import): productId, adminId, delta, qtyBefore, qtyAfter, reason, batchId, createdAt
+- `AlertLog` — productId + sentAt; backs the one-alert-per-product-per-day rule
 
 ## Alert Rules
-- Email fires when any product qty drops AT OR BELOW its threshold
-- Alert sent to master admin email only
-- One alert per product per day (no spam)
+- Email fires when a floor removal leaves a product AT OR BELOW its threshold (`server/src/services/alertService.ts`, called only from the removals route). Admin bulk updates and threshold imports never email but flag low stock (`belowThreshold`) in their result summary; catalog imports neither email nor flag it
+- Sent to the `ALERT_TO_EMAIL` address from `ALERT_FROM_EMAIL` (env vars, not the Admin row's email). If `SENDGRID_API_KEY`, `ALERT_FROM_EMAIL` or `ALERT_TO_EMAIL` is unset, nothing is emailed but the AlertLog row is still written
+- One alert per product per calendar day (UTC day boundaries), enforced via `AlertLog`
 - SendGrid for delivery
 
 ## Invariants — every change is checked against these
-- Stock changes are transactional: qty update + audit record (Removal/Receipt) commit together, with qtyBefore/qtyAfter snapshots on removals
+- Stock changes are transactional: qty update + audit record (Removal/Receipt/Adjustment) commit together, with qtyBefore/qtyAfter snapshots on removals and adjustments
 - Stock never goes negative; removals exceeding currentQty are rejected
 - Receipts increment stock by ACTUAL counted qty, never the PO's expected qty
 - Team members can only remove stock; only admins can add stock
-- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/*`, `GET /health`. Reads accept admin OR team tokens (`requireAnyAuth`); writes are role-specific
+- Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/admin/login`, `/auth/team/verify`, `/auth/admin/request-reset` and `/auth/admin/reset-password` (`POST /auth/admin/change-password` needs an admin token), and `GET /api/v1/health`. Product, brand and removal reads accept admin OR team tokens (`requireAnyAuth`); receipts, admin stats/activity and the CSV exports are admin-only; writes are role-specific
 - `pinHash` / `passwordHash` never appear in any API response
 - Both login flows are rate limited (5 attempts / 15 min, in-memory; expired entries are swept so the map can't grow unbounded)
 - Admin password change/reset revokes all outstanding admin JWTs: tokens carry a `tokenVersion` claim checked against `Admin.tokenVersion` on every admin-authed request (tokens minted before the claim count as 0); change-password returns a fresh token so the changing session stays signed in
@@ -74,7 +78,7 @@ This is a private tool used exclusively by the owner and 6 team members.
 - `JWT_SECRET` must be set in production — the server refuses to boot without it
 - Admin emails must be exactly `@twistedtreatz.com` (no subdomains/lookalikes): any writer of an admin email must call `isAllowedAdminEmail` from `server/src/lib/adminEmailPolicy.ts` (today only the seed script writes one)
 - Browser CORS is pinned: prod frontend origin + localhost in dev (`CORS_EXTRA_ORIGINS` env var for anything else)
-- Alerts fire at-or-below threshold, max once per product per day
+- Alerts fire at-or-below threshold on floor removals, max once per product per calendar day (UTC day boundaries)
 
 ## Testing — run before claiming anything works
 - `cd server && npm test` — vitest + supertest suite in `server/tests/` (auth matrix, login flows, stock math, alert rules). Prisma is mocked via the shared client in `server/src/lib/prisma.ts` — always import `prisma` from there, never `new PrismaClient()`
@@ -85,7 +89,7 @@ This is a private tool used exclusively by the owner and 6 team members.
 ## Agent roster
 - **Active**: `rick` (product owner + mad-scientist inventory systems expert — owns what/why, designs schemas, models data, builds features — run via `/rick`), `isaiah` (software architect — owns the technical HOW: data model integrity, API contracts, transactions, auth architecture, migrations, deploy topology — run via `/isaiah`), `gideon` (access & identity manager — creates/resets/deactivates team-member + admin accounts, owns the auth/permission surface — run via `/gideon`), `avery` (data analyst — read-only analysis of inventory data: trends, stock health, reorder points; asks clarifying questions, explains clearly — run via `/avery`), `james` (QA engineer — verifies every change — run via `/james` or `/qa`), `zahid` (security engineer — cybersecurity audits — run via `/zahid` or `/security-sweep`)
 - **Division of labor**: Rick = what/why (product) · Isaiah = how (architecture) · Gideon = who (users/access) · Avery = what the data says (analysis) · James + Zahid = verification (QA + security)
-- **Retired blueprints**: `database-agent`, `auth-agent`, `alert-agent`, `ipad-ui-agent`, `admin-agent` were build-time specs for the original construction (see `docs/MASTER_KICKOFF_PROMPT.md`). They describe intent, not current state — useful as reference, don't re-run them
+- **Retired blueprints**: the original build-time specs (`database-agent`, `auth-agent`, `alert-agent`, `ipad-ui-agent`, `admin-agent`) are NOT in the repo; `docs/MASTER_KICKOFF_PROMPT.md` is the only surviving artefact of that phase. It describes intent, not current state — don't re-run it
 
 ### Workflow — Rick decides first
 Rick is the product owner. For any **new feature or structural/architectural change**, consult Rick BEFORE writing code — he owns the what/why, makes the product call, and designs. Then build, then verify with James (`/qa`) — and Zahid (`/security-sweep`) if auth/data exposure is touched. Pure mechanical edits, bug fixes, and explicit user instructions don't need a Rick consult.
@@ -93,7 +97,7 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 ## Code Standards
 - ESM imports only (no require())
 - TypeScript preferred
-- Prettier formatting on every save
+- No formatter is configured; match the surrounding style
 - All API routes prefixed with /api/v1/
 - All responses: { success: boolean, data: any, error?: string }
 - Never expose PIN hashes or password hashes in API responses
@@ -107,35 +111,46 @@ Rick is the product owner. For any **new feature or structural/architectural cha
 - Screen auto-resets to member selection after 30 seconds of inactivity
 
 ## File Structure
+The git repository root holds README.md, AUDIT.md (the 2026-10-09 audit), .gitignore and this `twisted-treatz-inventory/` folder.
 ```
-/
-├── CLAUDE.md                  ← you are here
+twisted-treatz-inventory/
+├── CLAUDE.md                      ← you are here
 ├── .claude/
-│   ├── agents/                ← subagent definitions
-│   └── commands/              ← custom slash commands
-├── client/                    ← React frontend (Vite)
+│   ├── agents/                    ← subagent definitions (rick, isaiah, gideon, avery, james, zahid)
+│   └── commands/                  ← custom slash commands
+├── client/                        ← React frontend (Vite + Tailwind v4)
+│   └── src/
+│       ├── pages/
+│       │   ├── FloorApp.tsx       ← Screen 1: iPad removal UI
+│       │   ├── Admin.tsx          ← Screen 2: Admin dashboard
+│       │   ├── Receive.tsx        ← Screen 3: Receiving UI
+│       │   ├── AdminLogin.tsx, ForgotPassword.tsx, ResetPassword.tsx
+│       ├── components/admin/      ← dashboard tabs and modals
+│       ├── components/floor/      ← iPad screen pieces
+│       ├── api/                   ← client.ts (floor) + adminClient.ts (admin)
+│       ├── hooks/useAdminAuth.ts
+│       └── lib/                   ← csv.ts (own CSV parser), sheet.ts (lazy SheetJS)
+├── server/                        ← Node/Express backend
 │   ├── src/
-│   │   ├── pages/
-│   │   │   ├── FloorApp.tsx   ← Screen 1: iPad removal UI
-│   │   │   ├── Admin.tsx      ← Screen 2: Admin dashboard
-│   │   │   └── Receive.tsx    ← Screen 3: Receiving UI
-│   │   ├── components/
-│   │   └── api/               ← API client functions
-├── server/                    ← Node/Express backend
-│   ├── routes/
-│   ├── middleware/
-│   ├── prisma/
-│   └── services/
-│       └── alerts.ts          ← SendGrid email alerts
-└── docs/                      ← Project documentation
+│   │   ├── app.ts, index.ts
+│   │   ├── routes/                ← auth, products, brands, removals, receipts, adjustments, catalog, thresholds, teamMembers, adminStats
+│   │   ├── middleware/            ← requireAdmin, requireTeamMember, requireAnyAuth
+│   │   ├── services/              ← alertService.ts (SendGrid), emailTemplates.ts, passwordResetService.ts, tokenService.ts
+│   │   └── lib/                   ← prisma.ts (shared client), adminEmailPolicy.ts, brand.ts, measure.ts
+│   ├── prisma/                    ← schema.prisma, migrations/, seed.ts
+│   ├── scripts/                   ← one-off operational scripts (see docs/)
+│   └── tests/                     ← vitest + supertest suite
+├── data/raw_materials.csv         ← original catalogue used by the seed
+└── docs/                          ← runbooks, LESSONS.md and the original kickoff prompt
 ```
 
-## Current Data
-- 204 SKUs already catalogued in twisted_treatz_inventory.xlsx
-- Categories: Raw material, Gummy, Jelly Beans, Caramel Chews, Swedish Bubs, Sour Candy, Hard Candy, Candy Corn, Jelly, Sweet Candy, Spicy Candy
-- Suppliers include: Sam's Club, Webstaurant, Costco, HEB, Target, Katom, Bakell, Albanese Direct, etc.
+## Seed Data
+- The original catalogue is `data/raw_materials.csv` (203 data rows, two duplicate names), loaded by `server/prisma/seed.ts`. The spreadsheet it was exported from is not in the repo, and the live catalogue has since grown well past it (Hani's sheet import, 2026-06-29)
+- CSV categories: Raw material (one row is spelled "Raw Material" and seeds as a separate category), Gummy, Jelly Beans, Jelly, Caramel Chews, Sour Candy, Swedish Bubs, Candy Corn, Sweet Candy, Hard Candy, Spicy Candy, Grocery
+- The CSV has no supplier column; `supplier` is seeded null and filled in by admins later
+- `npm run db:seed` DELETES every receipt, removal, alert log, product and brand before inserting, and on a database that already has Adjustment rows it aborts partway (the product delete hits the Adjustment foreign key after the movement history is already gone). Never run it against the shared production database (local `server/.env` points there)
 
-## Build Order (follow this sequence)
+## Original build order (historical — every step below is done)
 1. Database schema + Prisma setup
 2. Seed script (import 204 SKUs from CSV)
 3. Auth system (admin login + team member PIN)

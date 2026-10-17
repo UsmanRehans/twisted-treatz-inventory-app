@@ -41,7 +41,6 @@ beforeEach(() => {
   mockPrisma.receipt.count.mockResolvedValue(0);
   mockPrisma.teamMember.findMany.mockResolvedValue([]);
   mockPrisma.brand.findMany.mockResolvedValue([]);
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
 });
 
 describe("GET /api/v1/removals (activity log)", () => {

@@ -76,11 +76,6 @@ export default function Receive() {
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Auth guard
-  if (!isAuthenticated || !token) {
-    return <Navigate to="/admin/login" replace />;
-  }
-
   // Load products and receipts on mount
   useEffect(() => {
     if (!token) return;
@@ -115,6 +110,13 @@ export default function Receive() {
     }, 100);
     return () => clearTimeout(t);
   }, [step]);
+
+  // Auth guard — must come after every hook above so the hook count is
+  // identical on every render (an early return before the hooks crashes
+  // React with "Rendered fewer hooks than expected" when the token expires).
+  if (!isAuthenticated || !token) {
+    return <Navigate to="/admin/login" replace />;
+  }
 
   // ─── Filtered products ─────────────────────────────────────────────
 

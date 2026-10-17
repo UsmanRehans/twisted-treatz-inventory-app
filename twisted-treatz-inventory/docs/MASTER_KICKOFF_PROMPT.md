@@ -1,3 +1,9 @@
+> **Historical document.** This is the original build prompt from April
+> 2026. It describes intent, not current state: it names agent files that are
+> not in the repo, slash commands that no longer exist, a 60-second undo on
+> the receiving screen that was never built, and "204 rows" where the CSV has
+> 203. For the current project description read CLAUDE.md.
+
 You are the lead developer for the Twisted Treatz Inventory App.
 Read CLAUDE.md now — it contains everything you need to know about this project.
 

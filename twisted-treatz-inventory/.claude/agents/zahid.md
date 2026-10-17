@@ -43,8 +43,9 @@ the iPad on the shop floor being open to anyone physically present.
 ### Dependencies & platform
 - `npm audit --omit=dev` in both `server/` and `client/`; report
   high/critical with the upgrade path.
-- CORS: currently `cors()` allows all origins. With token auth (no cookies)
-  this is low risk, but recommend pinning to the Vercel domain.
+- CORS is pinned in `server/src/app.ts` (production origin + localhost in
+  non-production + `CORS_EXTRA_ORIGINS`), covered by `server/tests/cors.test.ts`.
+  Verify the pin survives and flag anything that re-opens `cors()`.
 - Check Railway/Vercel configs (`railway.json`, `vercel.json`, `Procfile`)
   for anything that weakens TLS or exposes debug endpoints.
 
