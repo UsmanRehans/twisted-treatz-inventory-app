@@ -41,6 +41,16 @@ function shapeProduct(p: ProductRow) {
   return { ...rest, brand: brand?.name ?? null };
 }
 
+// Prices are admin-only. The read routes are shared with floor team tokens
+// (requireAnyAuth), so cost fields are stripped unless the caller is an
+// admin. Add any future cost/margin column here too.
+function shapeProductForViewer(p: ProductRow, req: AuthedRequest) {
+  const shaped = shapeProduct(p);
+  if (req.admin) return shaped;
+  const { unitPrice: _unitPrice, ...teamSafe } = shaped;
+  return teamSafe;
+}
+
 // ─── GET /api/v1/products/categories ───────────────────────────────
 // Any authenticated user — iPad fetches this after PIN verification.
 // Must be defined BEFORE /:id to avoid route conflict
@@ -112,7 +122,7 @@ router.get("/", requireAnyAuth, async (req: AuthedRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: products.map(shapeProduct),
+      data: products.map((p) => shapeProductForViewer(p, req)),
     });
   } catch (err) {
     console.error("Products fetch error:", err);
@@ -285,7 +295,7 @@ router.get("/:id", requireAnyAuth, async (req: AuthedRequest, res: Response) => 
 
     res.json({
       success: true,
-      data: shapeProduct(product),
+      data: shapeProductForViewer(product, req),
     });
   } catch (err) {
     console.error("Product fetch error:", err);

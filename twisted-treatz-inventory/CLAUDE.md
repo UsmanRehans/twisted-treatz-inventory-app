@@ -68,6 +68,7 @@ This is a private tool used exclusively by the owner and 6 team members.
 - Team members can only remove stock; only admins can add stock
 - Auth surface: everything requires a token EXCEPT `GET /team-members` (member-select screen), `POST /auth/*`, `GET /health`. Reads accept admin OR team tokens (`requireAnyAuth`); writes are role-specific
 - `pinHash` / `passwordHash` never appear in any API response
+- Prices are admin-only: `unitPrice` (and any future cost field) is stripped from product responses to team tokens (`shapeProductForViewer` in `server/src/routes/products.ts`)
 - Both login flows are rate limited (5 attempts / 15 min, in-memory; expired entries are swept so the map can't grow unbounded)
 - Admin password change/reset revokes all outstanding admin JWTs: tokens carry a `tokenVersion` claim checked against `Admin.tokenVersion` on every admin-authed request (tokens minted before the claim count as 0); change-password returns a fresh token so the changing session stays signed in
 - Reset-token consumption is atomic: validate + consume happen in one `updateMany` (no find-then-update race)
