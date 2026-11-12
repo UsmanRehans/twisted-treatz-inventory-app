@@ -309,6 +309,7 @@ export default function FloorApp() {
       {/* Bottom confirm bar — only visible when a product is selected */}
       {step === "browse" && selectedProduct && (
         <ConfirmBar
+          key={selectedProduct.id}
           product={selectedProduct}
           onConfirm={handleConfirmRemoval}
           onCancel={handleCancelProduct}

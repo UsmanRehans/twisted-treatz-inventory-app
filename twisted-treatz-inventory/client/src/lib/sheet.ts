@@ -5,7 +5,11 @@
 // SheetJS is pinned to the patched 0.20.x CDN build (see package.json).
 
 import * as XLSX from "xlsx";
-import type { CatalogImportRow } from "../api/adminClient";
+import type {
+  CatalogImportRow,
+  GroupingImportRow,
+  GroupingGroupMeta,
+} from "../api/adminClient";
 
 // Header aliases → canonical field. First match wins.
 const ALIASES: Record<keyof Omit<CatalogImportRow, never>, string[]> = {
@@ -115,4 +119,118 @@ export async function parseInventorySheet(file: File): Promise<ParsedSheet> {
   }
 
   return { rows, missingColumns, totalRows: rows.length };
+}
+
+// ─── Grouping sheet parser ──────────────────────────────────────────
+// Reads the "Product Grouping" sheet back: a Products tab (ID, Group,
+// Variation, Discontinued) and an optional Groups tab (Group, Category to
+// use, Type of variation). An .xlsx keeps both tabs; a single-table CSV
+// just has no Groups metadata, which is fine — labels/categories keep
+// their current values.
+
+export interface ParsedGroupingSheet {
+  rows: GroupingImportRow[];
+  groups: GroupingGroupMeta[];
+  totalRows: number;
+}
+
+export async function parseGroupingSheet(file: File): Promise<ParsedGroupingSheet> {
+  if (file.size > MAX_BYTES) {
+    throw new Error(`File is too large (max ${Math.floor(MAX_BYTES / 1024 / 1024)} MB)`);
+  }
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array", cellFormula: false, cellHTML: false });
+
+  const findSheet = (want: string): string | null =>
+    wb.SheetNames.find((n) => norm(n) === want) ?? null;
+
+  // Products rows live on a tab named "Products", else the first tab.
+  const productsSheet = findSheet("products") ?? wb.SheetNames[0];
+  if (!productsSheet) throw new Error("The file has no sheets");
+
+  const grid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[productsSheet], {
+    header: 1,
+    blankrows: false,
+    defval: null,
+  });
+  if (grid.length < 2) throw new Error("The sheet has no data rows");
+  if (grid.length > MAX_SHEET_ROWS) {
+    throw new Error(`Sheet has too many rows (max ${MAX_SHEET_ROWS.toLocaleString()})`);
+  }
+
+  const header = grid[0].map(norm);
+  const col = (...aliases: string[]): number => {
+    for (const a of aliases) {
+      const idx = header.findIndex((h) => h === a || h.startsWith(a));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  const idCol = col("id");
+  const groupCol = col("group");
+  const variationCol = col("variation", "variant");
+  const discontinuedCol = col("discontinued");
+  if (idCol === -1 || groupCol === -1) {
+    throw new Error('Could not find the "ID" and "Group" columns — is this the Grouping sheet?');
+  }
+
+  const str = (v: unknown): string | null => {
+    const s = String(v ?? "").trim();
+    return s === "" ? null : s;
+  };
+
+  const rows: GroupingImportRow[] = [];
+  for (let i = 1; i < grid.length; i++) {
+    const row = grid[i];
+    const idRaw = str(row[idCol]);
+    if (!idRaw) continue; // blank trailing rows
+    rows.push({
+      id: Number(idRaw),
+      group: str(row[groupCol]),
+      variation: variationCol !== -1 ? str(row[variationCol]) : null,
+      discontinued: discontinuedCol !== -1 ? str(row[discontinuedCol]) : null,
+    });
+  }
+
+  // Optional Groups tab → metadata (category + variant label per group).
+  const groups: GroupingGroupMeta[] = [];
+  const groupsSheet = findSheet("groups");
+  if (groupsSheet) {
+    const gGrid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[groupsSheet], {
+      header: 1,
+      blankrows: false,
+      defval: null,
+    });
+    if (gGrid.length > 1) {
+      const gHeader = gGrid[0].map(norm);
+      const gCol = (...aliases: string[]): number => {
+        for (const a of aliases) {
+          const idx = gHeader.findIndex((h) => h === a || h.startsWith(a));
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      };
+      const nameCol = gCol("group");
+      // Exact column only: a bare "category" alias would startsWith-match the
+      // read-only "Categories today" context column and bulk-write its
+      // comma-joined text as a real category.
+      const categoryCol = gCol("category to use");
+      const labelCol = gCol("type of variation", "variant label", "variation label");
+      if (nameCol !== -1) {
+        for (let i = 1; i < gGrid.length; i++) {
+          const row = gGrid[i];
+          const name = str(row[nameCol]);
+          if (!name) continue;
+          groups.push({
+            group: name,
+            category: categoryCol !== -1 ? str(row[categoryCol]) : null,
+            variantLabel: labelCol !== -1 ? str(row[labelCol]) : null,
+          });
+        }
+      }
+    }
+  }
+
+  return { rows, groups, totalRows: rows.length };
 }

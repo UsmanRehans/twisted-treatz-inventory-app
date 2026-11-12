@@ -53,6 +53,13 @@ export function createMockPrisma() {
       create: vi.fn(),
       findFirst: vi.fn(),
     },
+    productGroup: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     // Array form: run all queued promises. Routes only use this form.
     $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     $queryRaw: vi.fn(),

@@ -22,6 +22,10 @@ const productSelect = {
   uom: true,
   brandId: true,
   brand: { select: { id: true, name: true } },
+  // Variations: nothing sensitive here — name/label only. Grouping is
+  // display-only; editing it goes through the Grouping sheet round-trip.
+  variant: true,
+  group: { select: { id: true, name: true, variantLabel: true } },
   supplier: true,
   usedIn: true,
   currentQty: true,

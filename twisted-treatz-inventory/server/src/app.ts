@@ -9,6 +9,7 @@ import removalsRoutes from "./routes/removals.js";
 import receiptsRoutes from "./routes/receipts.js";
 import adjustmentsRoutes from "./routes/adjustments.js";
 import catalogRoutes from "./routes/catalog.js";
+import groupsRoutes from "./routes/groups.js";
 import thresholdsRoutes from "./routes/thresholds.js";
 
 // App construction lives here (separate from index.ts which calls listen)
@@ -49,6 +50,7 @@ app.use("/api/v1/removals", removalsRoutes);
 app.use("/api/v1/receipts", receiptsRoutes);
 app.use("/api/v1/adjustments", adjustmentsRoutes);
 app.use("/api/v1/catalog", catalogRoutes);
+app.use("/api/v1/groups", groupsRoutes);
 app.use("/api/v1/thresholds", thresholdsRoutes);
 
 // ─── Health check ───────────────────────────────────────────────────
