@@ -31,6 +31,36 @@ function itemName(i: MenuItem): string {
   return i.kind === "group" ? i.name : i.product.name;
 }
 
+function itemProducts(i: MenuItem): AdminProduct[] {
+  return i.kind === "group" ? i.variants : [i.product];
+}
+
+function itemQty(i: MenuItem): number {
+  return itemProducts(i).reduce((n, p) => n + p.currentQty, 0);
+}
+
+// An item is high-risk when any of its products carries the flag.
+function itemHighRisk(i: MenuItem): boolean {
+  return itemProducts(i).some((p) => p.highRisk);
+}
+
+function HighRiskPill() {
+  return (
+    <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white align-middle whitespace-nowrap">
+      High risk
+    </span>
+  );
+}
+
+// Risky items first, then emptiest shelves, then the alphabet.
+function compareItems(a: MenuItem, b: MenuItem): number {
+  const risk = Number(itemHighRisk(b)) - Number(itemHighRisk(a));
+  if (risk !== 0) return risk;
+  const qty = itemQty(a) - itemQty(b);
+  if (qty !== 0) return qty;
+  return itemName(a).localeCompare(itemName(b));
+}
+
 // Worst-of across the item's products: Out beats Low beats OK.
 function itemStatus(products: AdminProduct[]): "out" | "low" | "ok" {
   let status: "out" | "low" | "ok" = "ok";
@@ -59,6 +89,8 @@ function StatusBadge({ status }: { status: "out" | "low" | "ok" }) {
 
 export default function MenuView({ token, products, loading, onChanged }: MenuViewProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
+  const [highRiskOnly, setHighRiskOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<GroupingImportResult | null>(null);
@@ -112,16 +144,35 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
       push(p.category, { kind: "single", key: `p${p.id}`, product: p });
     }
 
+    // Search matches the item name or any variant; the high-risk filter
+    // keeps items that contain at least one flagged product.
+    const q = query.trim().toLowerCase();
+    const matches = (item: MenuItem) =>
+      (!q ||
+        itemName(item).toLowerCase().includes(q) ||
+        itemProducts(item).some(
+          (p) =>
+            p.name.toLowerCase().includes(q) || (p.variant ?? "").toLowerCase().includes(q),
+        )) &&
+      (!highRiskOnly || itemHighRisk(item));
+
     return [...byCategory.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([category, items]) => ({
         category,
-        items: items.sort((a, b) => itemName(a).localeCompare(itemName(b))),
-      }));
-  }, [products]);
+        items: items.filter(matches).sort(compareItems),
+      }))
+      .filter((s) => s.items.length > 0);
+  }, [products, query, highRiskOnly]);
 
   const hasGroups = useMemo(() => products.some((p) => p.group), [products]);
   const itemCount = sections.reduce((n, s) => n + s.items.length, 0);
+  const allGroupKeys = sections.flatMap((s) =>
+    s.items.filter((i) => i.kind === "group").map((i) => i.key),
+  );
+  const allOpen = allGroupKeys.length > 0 && allGroupKeys.every((k) => expanded.has(k));
+  // While searching, matched groups open themselves so the hit is visible.
+  const searching = query.trim() !== "";
 
   function toggle(key: string) {
     setExpanded((prev) => {
@@ -199,12 +250,32 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="text-sm text-gray-600">
-          {loading
-            ? "Loading..."
-            : `${itemCount} items (${products.length} products with flavors folded in)`}
-        </div>
+      <div className="flex items-center gap-3 mb-3">
+        <input
+          type="text"
+          placeholder="Search the menu..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+        />
+        <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white cursor-pointer whitespace-nowrap select-none">
+          <input
+            type="checkbox"
+            checked={highRiskOnly}
+            onChange={(e) => setHighRiskOnly(e.target.checked)}
+            className="accent-red-600"
+          />
+          High risk only
+        </label>
+        <button
+          onClick={() =>
+            setExpanded(allOpen ? new Set() : new Set(allGroupKeys))
+          }
+          disabled={allGroupKeys.length === 0}
+          className="px-3 py-2 bg-white text-gray-700 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+        >
+          {allOpen ? "Collapse all" : "Expand all"}
+        </button>
         <div className="flex gap-2">
           <button
             onClick={handleDownload}
@@ -232,6 +303,26 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
             }}
           />
         </div>
+      </div>
+
+      {/* Category jump chips + item count */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        <span className="text-xs text-gray-500 whitespace-nowrap">
+          {loading ? "Loading..." : `${itemCount} items (${products.length} products)`}
+        </span>
+        {sections.map((s) => (
+          <button
+            key={s.category}
+            onClick={() =>
+              document
+                .getElementById(`menu-cat-${s.category}`)
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs hover:bg-indigo-100 hover:text-indigo-700 whitespace-nowrap"
+          >
+            {s.category} ({s.items.length})
+          </button>
+        ))}
       </div>
 
       {applyResult && (
@@ -356,7 +447,7 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
       ) : (
         <div className="space-y-6">
           {sections.map((section) => (
-            <div key={section.category}>
+            <div key={section.category} id={`menu-cat-${section.category}`} className="scroll-mt-4">
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 {section.category}
               </h3>
@@ -369,7 +460,10 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
                         return (
                           <tr key={item.key} className="hover:bg-gray-50">
                             <td className="px-4 py-2.5 text-gray-900 font-medium w-6" />
-                            <td className="px-4 py-2.5 text-gray-900 font-medium">{p.name}</td>
+                            <td className="px-4 py-2.5 text-gray-900 font-medium">
+                              {p.name}
+                              {p.highRisk && <HighRiskPill />}
+                            </td>
                             <td className="px-4 py-2.5 text-gray-400 text-xs" />
                             <td className="px-4 py-2.5 text-right text-gray-900 font-mono w-24">
                               {p.currentQty}
@@ -380,7 +474,7 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
                           </tr>
                         );
                       }
-                      const isOpen = expanded.has(item.key);
+                      const isOpen = expanded.has(item.key) || searching;
                       const totalQty = item.variants.reduce((n, v) => n + v.currentQty, 0);
                       const label = item.variantLabel.toLowerCase();
                       return (
@@ -392,7 +486,10 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
                             <td className="px-4 py-2.5 text-gray-400 w-6">
                               {isOpen ? "▾" : "▸"}
                             </td>
-                            <td className="px-4 py-2.5 text-gray-900 font-medium">{item.name}</td>
+                            <td className="px-4 py-2.5 text-gray-900 font-medium">
+                              {item.name}
+                              {itemHighRisk(item) && <HighRiskPill />}
+                            </td>
                             <td className="px-4 py-2.5 text-gray-500 text-xs">
                               {item.variants.length} {label}
                               {item.variants.length === 1 ? "" : "s"}
@@ -407,12 +504,18 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
                           {isOpen &&
                             item.variants
                               .slice()
-                              .sort((a, b) => (a.variant ?? a.name).localeCompare(b.variant ?? b.name))
+                              .sort(
+                                (a, b) =>
+                                  Number(b.highRisk) - Number(a.highRisk) ||
+                                  a.currentQty - b.currentQty ||
+                                  (a.variant ?? a.name).localeCompare(b.variant ?? b.name),
+                              )
                               .map((v) => (
                                 <tr key={`${item.key}-${v.id}`} className="bg-gray-50/60">
                                   <td className="w-6" />
                                   <td className="px-4 py-2 pl-10 text-gray-700">
                                     {v.variant ?? v.name}
+                                    {v.highRisk && <HighRiskPill />}
                                   </td>
                                   <td className="px-4 py-2 text-gray-400 text-xs">
                                     threshold {v.alertThreshold}
