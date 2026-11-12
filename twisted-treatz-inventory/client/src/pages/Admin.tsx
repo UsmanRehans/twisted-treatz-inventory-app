@@ -1,10 +1,8 @@
 import { useState, lazy, Suspense } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAdminAuth } from "../hooks/useAdminAuth";
-import AdminSidebar, {
-  ADMIN_TABS,
-  type AdminTab,
-} from "../components/admin/AdminSidebar";
+import { ADMIN_TABS, type AdminTab } from "../components/admin/AdminSidebar";
+import AdminLayout from "../components/admin/AdminLayout";
 import StatCards from "../components/admin/StatCards";
 import ProductTable from "../components/admin/ProductTable";
 import StockHealth from "../components/admin/StockHealth";
@@ -34,13 +32,10 @@ export default function Admin() {
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex">
-      <AdminSidebar active={activeTab} onSelectTab={setActiveTab} />
-
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="mb-6">
+    <AdminLayout active={activeTab} onSelectTab={setActiveTab}>
+        <div className="max-w-6xl mx-auto p-3 sm:p-6">
+          {/* On small screens the top bar already shows the tab name. */}
+          <div className="mb-6 hidden lg:block">
             <h2 className="text-xl font-bold text-gray-900">
               {activeTab === "settings"
                 ? "Change Password"
@@ -64,7 +59,6 @@ export default function Admin() {
             <ChangePassword token={token} onTokenRefresh={refreshToken} />
           )}
         </div>
-      </main>
-    </div>
+    </AdminLayout>
   );
 }

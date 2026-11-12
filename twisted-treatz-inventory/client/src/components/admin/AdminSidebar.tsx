@@ -35,14 +35,18 @@ export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
 export default function AdminSidebar({
   active,
   onSelectTab,
+  onNavigate,
 }: {
   active: AdminTab;
   onSelectTab?: (tab: Exclude<AdminTab, "receiving">) => void;
+  // Called after any nav click — the mobile drawer uses it to close itself.
+  onNavigate?: () => void;
 }) {
   const navigate = useNavigate();
   const { admin, logout } = useAdminAuth();
 
   function handleClick(tab: AdminTab) {
+    onNavigate?.();
     if (tab === "receiving") {
       if (active !== "receiving") navigate("/admin/receive");
       return;
@@ -55,7 +59,7 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex flex-col h-full">
+    <aside className="w-64 lg:w-60 bg-white border-r border-gray-200 flex flex-col h-full">
       <div className="p-5 border-b border-gray-200">
         <h1 className="text-lg font-bold text-gray-900">Twisted Treatz</h1>
         <p className="text-xs text-gray-500 mt-0.5">Admin Dashboard</p>

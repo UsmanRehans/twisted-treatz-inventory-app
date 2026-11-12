@@ -283,19 +283,19 @@ export default function ProductTable({ token }: ProductTableProps) {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-3 mb-3">
+      {/* Filters — one row on wide screens, wrapping on narrow ones */}
+      <div className="grid grid-cols-2 gap-2 mb-3 sm:flex sm:flex-wrap sm:gap-3">
         <input
           type="text"
           placeholder="Search products..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+          className="col-span-2 w-full xl:w-auto xl:flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
         />
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+          className="w-full sm:w-auto min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
         >
           <option value="All">All Categories</option>
           {categories.map((c) => (
@@ -307,7 +307,7 @@ export default function ProductTable({ token }: ProductTableProps) {
         <select
           value={brandId}
           onChange={(e) => setBrandId(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+          className="w-full sm:w-auto min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
         >
           <option value="All">All Brands</option>
           {brands.map((b) => (
@@ -338,13 +338,13 @@ export default function ProductTable({ token }: ProductTableProps) {
           onClick={handleDownloadSheet}
           disabled={exporting}
           title="Download the master product sheet (CSV, opens in Excel) — edit it, then upload it on the Product Sheet tab"
-          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+          className="hidden sm:block px-4 py-2 bg-white text-gray-700 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
         >
           {exporting ? "Exporting…" : "Download Sheet"}
         </button>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 whitespace-nowrap"
+          className="col-span-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 whitespace-nowrap"
         >
           + Add Product
         </button>

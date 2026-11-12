@@ -60,11 +60,11 @@ export default function StatCards({ token }: StatCardsProps) {
 
   return (
     <div>
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {cards.map((card) => (
           <div
             key={card.label}
-            className={`rounded-lg p-5 ${card.color} border border-current/10`}
+            className={`rounded-lg p-4 sm:p-5 ${card.color} border border-current/10`}
           >
             <p className="text-sm font-medium opacity-75">{card.label}</p>
             <p className="text-2xl font-bold mt-1">{card.value}</p>
@@ -81,19 +81,19 @@ export default function StatCards({ token }: StatCardsProps) {
             {stats.lowStockProducts.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-orange-100"
+                className="flex items-center justify-between gap-3 bg-white rounded-md px-3 py-2 border border-orange-100"
               >
-                <div>
+                <div className="min-w-0">
                   <span className="font-medium text-gray-900">{p.name}</span>
-                  <span className="text-sm text-gray-500 ml-2">{p.category}</span>
+                  <span className="text-sm text-gray-500 ml-2 whitespace-nowrap">{p.category}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm font-medium ${p.currentQty === 0 ? "text-red-600" : "text-orange-600"}`}>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className={`text-sm font-medium whitespace-nowrap ${p.currentQty === 0 ? "text-red-600" : "text-orange-600"}`}>
                     {p.currentQty} / {p.alertThreshold}
                   </span>
                   <a
                     href="/admin/receive"
-                    className="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition-colors"
+                    className="text-xs bg-indigo-600 text-white px-3 py-2 sm:py-1 rounded hover:bg-indigo-700 transition-colors"
                   >
                     Receive
                   </a>

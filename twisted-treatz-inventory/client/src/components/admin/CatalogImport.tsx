@@ -121,8 +121,8 @@ export default function CatalogImport({ token }: CatalogImportProps) {
       )}
 
       {/* Download template */}
-      <div className="mb-4 p-5 border border-gray-200 rounded-lg bg-white">
-        <div className="flex items-center justify-between gap-4">
+      <div className="mb-4 p-4 sm:p-5 border border-gray-200 rounded-lg bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h3 className="font-medium text-gray-900">Download product sheet</h3>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -142,8 +142,8 @@ export default function CatalogImport({ token }: CatalogImportProps) {
       </div>
 
       {/* Upload */}
-      <div className="p-5 border border-gray-200 rounded-lg bg-white">
-        <div className="flex items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 border border-gray-200 rounded-lg bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h3 className="font-medium text-gray-900">Upload inventory sheet</h3>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -278,7 +278,7 @@ export default function CatalogImport({ token }: CatalogImportProps) {
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={handleApply}
               disabled={busy || nothingToDo || !zeroConfirmed}
@@ -353,7 +353,7 @@ function PreviewTable({
   return (
     <div className="mb-4">
       <p className="text-sm font-medium text-gray-700 mb-1">{title}</p>
-      <div className="border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+      <div className="border border-gray-200 rounded-lg overflow-auto max-h-80">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
             <tr>

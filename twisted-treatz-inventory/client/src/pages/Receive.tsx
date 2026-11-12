@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Navigate } from "react-router-dom";
 import { useAdminAuth } from "../hooks/useAdminAuth";
-import AdminSidebar from "../components/admin/AdminSidebar";
+import AdminLayout from "../components/admin/AdminLayout";
 import {
   fetchAdminProducts,
   createReceipt,
@@ -230,11 +230,11 @@ export default function Receive() {
     const labels = ["Product", "Supplier", "Expected", "Count", "Verify", "Notes", "Review"];
     const currentIdx = stepIndex(step);
     return (
-      <div className="flex items-center gap-1 mb-6">
+      <div className="flex items-center gap-0.5 sm:gap-1 mb-6">
         {labels.map((label, i) => (
-          <div key={label} className="flex items-center gap-1">
+          <div key={label} className="flex items-center gap-0.5 sm:gap-1">
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
+              className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 rounded-full text-xs font-bold ${
                 i < currentIdx
                   ? "bg-green-500 text-white"
                   : i === currentIdx
@@ -253,7 +253,7 @@ export default function Receive() {
             </span>
             {i < labels.length - 1 && (
               <div
-                className={`w-4 h-0.5 ${
+                className={`w-2 sm:w-4 h-0.5 ${
                   i < currentIdx ? "bg-green-400" : "bg-gray-200"
                 }`}
               />
@@ -268,10 +268,9 @@ export default function Receive() {
 
   if (successInfo) {
     return (
-      <div className="h-screen bg-gray-50 flex">
-        <AdminSidebar active="receiving" />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="bg-white rounded-xl shadow-lg p-10 text-center max-w-md w-full">
+      <AdminLayout active="receiving">
+        <div className="h-full flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-10 text-center max-w-md w-full">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-green-600 text-3xl font-bold">{"\u2713"}</span>
             </div>
@@ -291,24 +290,22 @@ export default function Receive() {
             </button>
           </div>
         </div>
-      </div>
+      </AdminLayout>
     );
   }
 
   // ─── Main Render ───────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-gray-50 flex">
-      <AdminSidebar active="receiving" />
-
-      <main className="flex-1 overflow-auto p-6">
-        <div className="max-w-7xl mx-auto mb-6">
+    <AdminLayout active="receiving">
+      <div className="p-3 sm:p-6">
+        <div className="max-w-7xl mx-auto mb-6 hidden lg:block">
           <h2 className="text-xl font-bold text-gray-900">Receiving</h2>
         </div>
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6">
+        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-6">
           {/* Left: Receipt Form */}
           <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-1">New Receipt</h2>
               <p className="text-sm text-gray-500 mb-4">
                 Record an incoming shipment step by step
@@ -626,8 +623,8 @@ export default function Receive() {
           </div>
 
           {/* Right: Recent Receipts */}
-          <div className="w-full lg:w-[440px] flex-shrink-0">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="w-full xl:w-[440px] flex-shrink-0">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Recent Receipts</h2>
 
               {loadingReceipts ? (
@@ -643,7 +640,7 @@ export default function Receive() {
                         <th className="pb-2 font-semibold text-gray-600 pr-3">Product</th>
                         <th className="pb-2 font-semibold text-gray-600 pr-2 text-right">Exp</th>
                         <th className="pb-2 font-semibold text-gray-600 pr-2 text-right">Act</th>
-                        <th className="pb-2 font-semibold text-gray-600">Supplier</th>
+                        <th className="hidden sm:table-cell pb-2 font-semibold text-gray-600">Supplier</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -656,10 +653,10 @@ export default function Receive() {
                               mismatch ? "bg-orange-50" : ""
                             }`}
                           >
-                            <td className="py-2 pr-3 text-xs text-gray-500 whitespace-nowrap">
+                            <td className="py-2 pr-3 text-xs text-gray-500 min-w-[5.5rem]">
                               {formatChicago(r.createdAt)}
                             </td>
-                            <td className="py-2 pr-3 text-gray-900 font-medium max-w-[140px] truncate">
+                            <td className="py-2 pr-3 text-gray-900 font-medium max-w-[130px] truncate">
                               {r.productName}
                             </td>
                             <td className="py-2 pr-2 text-right text-gray-700">
@@ -672,7 +669,7 @@ export default function Receive() {
                             >
                               {r.actualQty}
                             </td>
-                            <td className="py-2 text-gray-500 max-w-[100px] truncate">
+                            <td className="hidden sm:table-cell py-2 text-gray-500 max-w-[100px] truncate">
                               {r.supplier || "\u2014"}
                             </td>
                           </tr>
@@ -685,8 +682,8 @@ export default function Receive() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 
@@ -694,7 +691,7 @@ export default function Receive() {
 
 function SelectedProductBadge({ product }: { product: AdminProduct }) {
   return (
-    <div className="mb-4 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between">
+    <div className="mb-4 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
       <div>
         <span className="text-sm font-semibold text-indigo-800">{product.name}</span>
         <span className="text-xs text-indigo-500 ml-2">{product.category}</span>
