@@ -212,7 +212,10 @@ export async function parseGroupingSheet(file: File): Promise<ParsedGroupingShee
         return -1;
       };
       const nameCol = gCol("group");
-      const categoryCol = gCol("category to use", "category");
+      // Exact column only: a bare "category" alias would startsWith-match the
+      // read-only "Categories today" context column and bulk-write its
+      // comma-joined text as a real category.
+      const categoryCol = gCol("category to use");
       const labelCol = gCol("type of variation", "variant label", "variation label");
       if (nameCol !== -1) {
         for (let i = 1; i < gGrid.length; i++) {

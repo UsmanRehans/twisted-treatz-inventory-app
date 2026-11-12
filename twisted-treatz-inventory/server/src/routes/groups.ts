@@ -109,7 +109,12 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       groups?: unknown;
       dryRun?: unknown;
     };
-    const isDryRun = dryRun === true;
+    // Fail-safe: dry-run-first means an ambiguous request must never apply.
+    if (typeof dryRun !== "boolean") {
+      res.status(400).json({ success: false, data: null, error: "dryRun must be a boolean" });
+      return;
+    }
+    const isDryRun = dryRun;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       res.status(400).json({ success: false, data: null, error: "rows must be a non-empty array" });
@@ -131,8 +136,10 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       const g = (raw ?? {}) as Record<string, unknown>;
       const name = typeof g.group === "string" ? g.group.trim() : "";
       if (!name || name.length > MAX_NAME) continue;
-      const category =
+      const categoryRaw =
         typeof g.category === "string" && g.category.trim() !== "" ? g.category.trim() : null;
+      if (categoryRaw && categoryRaw.length > MAX_NAME) continue; // oversized metadata: ignore the row
+      const category = categoryRaw;
       const variantLabel =
         typeof g.variantLabel === "string" && g.variantLabel.trim() !== ""
           ? g.variantLabel.trim().slice(0, 50)

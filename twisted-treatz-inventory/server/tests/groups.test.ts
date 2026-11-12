@@ -174,6 +174,22 @@ describe("POST /api/v1/groups/import (dry run)", () => {
     expect(res.status).toBe(400);
   });
 
+  it("refuses to run at all without an explicit boolean dryRun", async () => {
+    // Fail-safe: an ambiguous request must never silently APPLY.
+    for (const body of [
+      { rows: [{ id: 10, group: "X" }] },
+      { rows: [{ id: 10, group: "X" }], dryRun: "true" },
+    ]) {
+      const res = await request(app)
+        .post("/api/v1/groups/import")
+        .set(auth(adminToken))
+        .send(body);
+      expect(res.status).toBe(400);
+    }
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+    expect(mockPrisma.productGroup.upsert).not.toHaveBeenCalled();
+  });
+
   it("plans grouping, ungrouping and new groups without writing", async () => {
     const res = await request(app)
       .post("/api/v1/groups/import")
@@ -260,6 +276,7 @@ describe("POST /api/v1/groups/import (apply)", () => {
       .post("/api/v1/groups/import")
       .set(auth(adminToken))
       .send({
+        dryRun: false,
         rows: [{ id: 12, group: "Syrups", variation: "Glucose" }],
         groups: [{ group: "Syrups", variantLabel: "Type" }],
       });
@@ -290,12 +307,12 @@ describe("POST /api/v1/groups/import (apply)", () => {
     await request(app)
       .post("/api/v1/groups/import")
       .set(auth(adminToken))
-      .send({ rows: [{ id: 11, group: "", variation: "Orange" }] });
+      .send({ dryRun: false, rows: [{ id: 11, group: "", variation: "Orange" }] });
     // variation without group is skipped, so send truly blank variation
     await request(app)
       .post("/api/v1/groups/import")
       .set(auth(adminToken))
-      .send({ rows: [{ id: 11, group: "", variation: "" }] });
+      .send({ dryRun: false, rows: [{ id: 11, group: "", variation: "" }] });
     expect(mockPrisma.product.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 11 },
@@ -308,7 +325,7 @@ describe("POST /api/v1/groups/import (apply)", () => {
     await request(app)
       .post("/api/v1/groups/import")
       .set(auth(adminToken))
-      .send({ rows: [{ id: 12, discontinued: "x" }] });
+      .send({ dryRun: false, rows: [{ id: 12, discontinued: "x" }] });
 
     expect(mockPrisma.product.update).toHaveBeenCalledTimes(1);
     const { data } = mockPrisma.product.update.mock.calls[0][0];
@@ -324,7 +341,7 @@ describe("POST /api/v1/groups/import (apply)", () => {
     const res = await request(app)
       .post("/api/v1/groups/import")
       .set(auth(adminToken))
-      .send({ rows: [{ id: 13, group: "", variation: "", discontinued: "" }] });
+      .send({ dryRun: false, rows: [{ id: 13, group: "", variation: "", discontinued: "" }] });
     expect(res.status).toBe(201);
     // row 13 is inactive and ungrouped → nothing to do, no update at all
     expect(res.body.data.unchanged).toBe(1);
@@ -338,6 +355,7 @@ describe("POST /api/v1/groups/import (apply)", () => {
       .post("/api/v1/groups/import")
       .set(auth(adminToken))
       .send({
+        dryRun: false,
         rows: [{ id: 11, group: "Fruit Jelly", variation: "Orange" }],
         groups: [{ group: "Fruit Jelly", category: "Jelly" }],
       });

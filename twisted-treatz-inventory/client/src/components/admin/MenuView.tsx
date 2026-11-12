@@ -186,7 +186,8 @@ export default function MenuView({ token, products, loading, onChanged }: MenuVi
     ? preview.summary.grouped +
       preview.summary.ungrouped +
       preview.summary.categoryChanges +
-      preview.summary.deactivations
+      preview.summary.deactivations +
+      preview.labelChanges.length
     : 0;
 
   return (
