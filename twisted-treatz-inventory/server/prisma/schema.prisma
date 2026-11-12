@@ -23,6 +23,12 @@ model Product {
   brandText      String?
   brandId        Int?
   brand          Brand?    @relation(fields: [brandId], references: [id])
+  // Variations: a product can sit under a ProductGroup ("Jelly Beans") with
+  // `variant` naming what makes it different ("Root Beer", "Navy / XL").
+  // Display-only grouping — stock, thresholds and history stay on Product.
+  groupId        Int?
+  group          ProductGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  variant        String?
   supplier       String?
   usedIn         String? // which finished candy product it goes into
   currentQty     Int       @default(0)
@@ -39,6 +45,21 @@ model Product {
   adjustments    Adjustment[]
 
   @@index([brandId])
+  @@index([groupId])
+}
+
+// Parent "item" that folds flavors/sizes of the same product into one line
+// (469 products → ~190 items). Named ProductGroup, not Item, because the
+// catalog sheet already uses "Item" for Product.name. Maintained through the
+// Grouping sheet round-trip (routes/groups.ts); groups left with no products
+// are deleted on import.
+model ProductGroup {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  variantLabel String    @default("Flavor") // heading for the picker: Flavor, Size…
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  products     Product[]
 }
 
 // First-class brand entity. Promoted from the free-text Product.brand column

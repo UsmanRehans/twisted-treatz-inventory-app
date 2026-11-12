@@ -10,6 +10,7 @@ import type { AdminProduct, Brand } from "../../api/adminClient";
 import { downloadCsvFile } from "../../lib/csv";
 import AddProductModal from "./AddProductModal";
 import EditProductModal from "./EditProductModal";
+import MenuView from "./MenuView";
 
 interface ProductTableProps {
   token: string;
@@ -75,6 +76,9 @@ export default function ProductTable({ token }: ProductTableProps) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [highRiskOnly, setHighRiskOnly] = useState(false);
+  // Two lenses on the same products: Hani's Menu (flavors folded under one
+  // item) and the flat All Products table. Menu is the default.
+  const [view, setView] = useState<"menu" | "all">("menu");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Same sheet as the Product Sheet tab (download-only here — uploads live
@@ -203,6 +207,41 @@ export default function ProductTable({ token }: ProductTableProps) {
           {exportError}
         </div>
       )}
+      {/* View toggle */}
+      <div className="mb-4">
+        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden text-sm font-medium">
+          <button
+            onClick={() => setView("menu")}
+            className={`px-4 py-2 ${
+              view === "menu" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Menu
+          </button>
+          <button
+            onClick={() => setView("all")}
+            className={`px-4 py-2 border-l border-gray-300 ${
+              view === "all" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            All Products
+          </button>
+        </div>
+      </div>
+
+      {view === "menu" && (
+        <MenuView
+          token={token}
+          products={products.filter((p) => p.active)}
+          loading={loading}
+          onChanged={() => {
+            loadProducts();
+            fetchAdminCategories(token).then(setCategories).catch(console.error);
+          }}
+        />
+      )}
+
+      <div className={view === "all" ? "" : "hidden"}>
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <input
@@ -465,6 +504,7 @@ export default function ProductTable({ token }: ProductTableProps) {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }
