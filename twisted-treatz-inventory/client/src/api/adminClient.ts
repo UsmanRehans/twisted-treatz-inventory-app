@@ -42,6 +42,7 @@ export interface AdminProduct {
   alertThreshold: number;
   unitPrice: string | null;
   active: boolean;
+  highRisk: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -241,6 +242,7 @@ export interface CreateProductData {
   usedIn?: string | null;
   alertThreshold?: number;
   unitPrice?: number | null;
+  highRisk?: boolean;
 }
 
 export async function createProduct(

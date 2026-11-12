@@ -443,3 +443,43 @@ describe("unitPrice validation — bad input must 400, never 500", () => {
     }
   });
 });
+
+describe("highRisk label", () => {
+  it("PATCH forwards highRisk:true", async () => {
+    const res = await request(app)
+      .patch("/api/v1/products/1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ highRisk: true });
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.product.update.mock.calls[0][0].data.highRisk).toBe(true);
+  });
+
+  it("PATCH rejects a non-boolean highRisk", async () => {
+    const res = await request(app)
+      .patch("/api/v1/products/1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ highRisk: "yes" });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+
+  it("POST defaults highRisk to false and accepts true", async () => {
+    await asAdmin({ name: "A", category: "Gummy", purchaseUnit: "Bag" });
+    expect(mockPrisma.product.create.mock.calls[0][0].data.highRisk).toBe(false);
+
+    await asAdmin({ name: "B", category: "Gummy", purchaseUnit: "Bag", highRisk: true });
+    expect(mockPrisma.product.create.mock.calls[1][0].data.highRisk).toBe(true);
+  });
+
+  it("team tokens cannot PATCH highRisk", async () => {
+    const res = await request(app)
+      .patch("/api/v1/products/1")
+      .set("Authorization", `Bearer ${teamToken}`)
+      .send({ highRisk: true });
+
+    expect(res.status).toBe(403);
+    expect(mockPrisma.product.update).not.toHaveBeenCalled();
+  });
+});

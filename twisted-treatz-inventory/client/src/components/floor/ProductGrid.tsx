@@ -28,9 +28,13 @@ export default function ProductGrid({
 }: ProductGridProps) {
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
+  const [highRiskOnly, setHighRiskOnly] = useState(false);
 
   const filtered = useMemo(() => {
     let result = products;
+    if (highRiskOnly) {
+      result = result.filter((p) => p.highRisk);
+    }
     if (activeCategory !== "All") {
       result = result.filter((p) => p.category === activeCategory);
     }
@@ -39,7 +43,7 @@ export default function ProductGrid({
       result = result.filter((p) => p.name.toLowerCase().includes(q));
     }
     return result;
-  }, [products, activeCategory, search]);
+  }, [products, activeCategory, search, highRiskOnly]);
 
   return (
     <div className="flex flex-col h-full">
@@ -55,6 +59,17 @@ export default function ProductGrid({
           placeholder="Search products..."
           className="flex-1 min-h-[48px] px-4 rounded-lg border border-gray-200 bg-gray-50 text-[16px] text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400"
         />
+        <button
+          onClick={() => setHighRiskOnly((v) => !v)}
+          aria-pressed={highRiskOnly}
+          className={`min-h-[48px] px-5 rounded-lg text-[16px] font-medium flex-shrink-0 ${
+            highRiskOnly
+              ? "bg-red-600 text-white active:bg-red-700"
+              : "bg-gray-100 text-gray-600 active:bg-gray-200"
+          }`}
+        >
+          High Risk
+        </button>
         <button
           onClick={onStock}
           className="min-h-[48px] px-5 rounded-lg bg-gray-100 text-[16px] text-gray-600 font-medium active:bg-gray-200 flex-shrink-0"
@@ -93,7 +108,7 @@ export default function ProductGrid({
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-40">
             <span className="text-gray-400 text-[18px]">
-              No products found
+              {highRiskOnly ? "No high risk products found" : "No products found"}
             </span>
           </div>
         ) : (

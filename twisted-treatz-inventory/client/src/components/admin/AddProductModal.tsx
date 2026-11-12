@@ -38,6 +38,7 @@ export default function AddProductModal({
   const [usedIn, setUsedIn] = useState("");
   const [alertThreshold, setAlertThreshold] = useState("10");
   const [unitPrice, setUnitPrice] = useState("");
+  const [highRisk, setHighRisk] = useState(false);
   const [brandChoice, setBrandChoice] = useState(""); // "" = none, id, or NEW_BRAND
   const [newBrandName, setNewBrandName] = useState("");
 
@@ -84,6 +85,7 @@ export default function AddProductModal({
         brandId,
         alertThreshold: isNaN(threshold) ? 10 : threshold,
         unitPrice: price !== null && !isNaN(price) ? price : null,
+        highRisk,
       };
 
       await createProduct(token, data);
@@ -270,6 +272,17 @@ export default function AddProductModal({
               />
             </div>
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={highRisk}
+              onChange={(e) => setHighRisk(e.target.checked)}
+              className="accent-red-600"
+            />
+            High risk
+            <span className="text-xs text-gray-400">(shows a red label on admin + floor)</span>
+          </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

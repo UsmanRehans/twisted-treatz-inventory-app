@@ -49,6 +49,7 @@ export default function EditProductModal({
     product.brandId !== null ? String(product.brandId) : ""
   );
   const [newBrandName, setNewBrandName] = useState("");
+  const [highRisk, setHighRisk] = useState(product.highRisk);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +102,8 @@ export default function EditProductModal({
       return null;
     }
     if (nextPrice !== prevPrice) patch.unitPrice = nextPrice;
+
+    if (highRisk !== product.highRisk) patch.highRisk = highRisk;
 
     // Brand: existing id, a newly created brand, or none.
     let brandId: number | null;
@@ -346,6 +349,17 @@ export default function EditProductModal({
               />
             </div>
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={highRisk}
+              onChange={(e) => setHighRisk(e.target.checked)}
+              className="accent-red-600"
+            />
+            High risk
+            <span className="text-xs text-gray-400">(shows a red label on admin + floor)</span>
+          </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

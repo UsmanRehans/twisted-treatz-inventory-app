@@ -29,6 +29,9 @@ model Product {
   alertThreshold Int       @default(10)
   unitPrice      Decimal?  @db.Decimal(10, 2)
   active         Boolean   @default(true)
+  // Hani's "high risk" list — purely a visual label so staff spot these
+  // items at a glance (admin table + floor iPad). No behavior attached.
+  highRisk       Boolean   @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   removals       Removal[]

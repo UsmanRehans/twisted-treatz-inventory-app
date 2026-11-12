@@ -21,6 +21,7 @@ export interface Product {
   alertThreshold: number;
   unitPrice: string | null;
   active: boolean;
+  highRisk: boolean;
   createdAt: string;
   updatedAt: string;
 }

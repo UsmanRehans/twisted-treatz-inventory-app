@@ -28,6 +28,7 @@ const productSelect = {
   alertThreshold: true,
   unitPrice: true,
   active: true,
+  highRisk: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.ProductSelect;
@@ -143,6 +144,7 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
       usedIn,
       alertThreshold,
       unitPrice,
+      highRisk,
     } = req.body;
 
     // Required fields
@@ -179,6 +181,11 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
     const packParsed = parsePackSize(packSize);
     if (!packParsed.ok) {
       res.status(400).json({ success: false, data: null, error: packParsed.reason });
+      return;
+    }
+
+    if (highRisk !== undefined && typeof highRisk !== "boolean") {
+      res.status(400).json({ success: false, data: null, error: "highRisk must be a boolean" });
       return;
     }
 
@@ -228,6 +235,7 @@ router.post("/", requireAdmin, async (req: AdminRequest, res: Response) => {
             ? new Prisma.Decimal(unitPrice as string | number)
             : null,
         active: true,
+        highRisk: highRisk ?? false,
       },
       select: productSelect,
     });
@@ -319,6 +327,7 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       "flavor",
       "supplier",
       "usedIn",
+      "highRisk",
     ];
     const updateData: Record<string, unknown> = {};
 
@@ -333,7 +342,7 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
         success: false,
         data: null,
         error:
-          "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId, packSize, uom, purchaseUnit, flavor, supplier, usedIn",
+          "No valid fields to update. Allowed: alertThreshold, name, category, active, unitPrice, brandId, packSize, uom, purchaseUnit, flavor, supplier, usedIn, highRisk",
       });
       return;
     }
@@ -373,14 +382,16 @@ router.patch("/:id", requireAdmin, async (req: AdminRequest, res: Response) => {
       updateData[field] = val.trim() || null;
     }
 
-    // active must be a boolean if provided
-    if (updateData.active !== undefined && typeof updateData.active !== "boolean") {
-      res.status(400).json({
-        success: false,
-        data: null,
-        error: "active must be a boolean",
-      });
-      return;
+    // active / highRisk must be booleans if provided
+    for (const field of ["active", "highRisk"] as const) {
+      if (updateData[field] !== undefined && typeof updateData[field] !== "boolean") {
+        res.status(400).json({
+          success: false,
+          data: null,
+          error: `${field} must be a boolean`,
+        });
+        return;
+      }
     }
 
     // Normalize packSize / uom if provided. null clears the field.

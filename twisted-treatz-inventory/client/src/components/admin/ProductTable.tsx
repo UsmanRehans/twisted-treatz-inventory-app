@@ -74,6 +74,7 @@ export default function ProductTable({ token }: ProductTableProps) {
   const [showInactive, setShowInactive] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [highRiskOnly, setHighRiskOnly] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Same sheet as the Product Sheet tab (download-only here — uploads live
@@ -174,13 +175,15 @@ export default function ProductTable({ token }: ProductTableProps) {
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 50;
-  const totalPages = Math.ceil(products.length / pageSize);
-  const paged = products.slice((page - 1) * pageSize, page * pageSize);
+  // High-risk filter is client-side: the list is already fully loaded.
+  const visible = highRiskOnly ? products.filter((p) => p.highRisk) : products;
+  const totalPages = Math.ceil(visible.length / pageSize);
+  const paged = visible.slice((page - 1) * pageSize, page * pageSize);
 
   // Reset to page 1 on filter changes
   useEffect(() => {
     setPage(1);
-  }, [search, category, brandId, sortField, sortOrder, showInactive]);
+  }, [search, category, brandId, sortField, sortOrder, showInactive, highRiskOnly]);
 
   function handleSaved(updated: AdminProduct) {
     if (!updated.active && !showInactive) {
@@ -241,6 +244,15 @@ export default function ProductTable({ token }: ProductTableProps) {
             className="accent-indigo-600"
           />
           Show inactive
+        </label>
+        <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white cursor-pointer whitespace-nowrap select-none">
+          <input
+            type="checkbox"
+            checked={highRiskOnly}
+            onChange={(e) => setHighRiskOnly(e.target.checked)}
+            className="accent-red-600"
+          />
+          High risk only
         </label>
         <button
           onClick={handleDownloadSheet}
@@ -338,6 +350,11 @@ export default function ProductTable({ token }: ProductTableProps) {
                   >
                     <td className="px-4 py-2.5 text-gray-900 font-medium">
                       {product.name}
+                      {product.highRisk && (
+                        <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white align-middle whitespace-nowrap">
+                          High risk
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-gray-600">
                       {product.category}
@@ -425,8 +442,8 @@ export default function ProductTable({ token }: ProductTableProps) {
             <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
               <span>
                 Showing {(page - 1) * pageSize + 1}-
-                {Math.min(page * pageSize, products.length)} of{" "}
-                {products.length} products
+                {Math.min(page * pageSize, visible.length)} of{" "}
+                {visible.length} products
               </span>
               <div className="flex gap-2">
                 <button
