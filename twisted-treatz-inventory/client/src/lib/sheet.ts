@@ -15,6 +15,8 @@ const ALIASES: Record<keyof Omit<CatalogImportRow, never>, string[]> = {
   packSize: ["pack size", "packsize", "pack_size", "pack"],
   uom: ["uom", "unit", "unit of measure", "units"],
   brand: ["brand", "brand name"],
+  supplier: ["supplier", "vendor"],
+  alertThreshold: ["alert threshold", "threshold", "alert_threshold", "reorder point"],
 };
 
 function norm(s: unknown): string {
@@ -69,6 +71,8 @@ export async function parseInventorySheet(file: File): Promise<ParsedSheet> {
     packSize: colOf("packSize"),
     uom: colOf("uom"),
     brand: colOf("brand"),
+    supplier: colOf("supplier"),
+    alertThreshold: colOf("alertThreshold"),
   };
 
   if (cols.item === -1) {
@@ -103,6 +107,10 @@ export async function parseInventorySheet(file: File): Promise<ParsedSheet> {
       // qty: blank stays null here; the SERVER applies the empty→0 rule and
       // flags it, so the preview can show the admin exactly what gets zeroed.
       qty: num(cell(row, cols.qty)),
+      // supplier/threshold: blank = no change (server-side rule; empty→0 is
+      // qty-only and must never zero a threshold).
+      supplier: str(cell(row, cols.supplier)),
+      alertThreshold: num(cell(row, cols.alertThreshold)),
     });
   }
 

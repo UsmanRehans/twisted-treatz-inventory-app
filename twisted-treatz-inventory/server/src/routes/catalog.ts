@@ -9,16 +9,18 @@ const router = Router();
 
 // ─── Catalog import ──────────────────────────────────────────────────
 // Ingests Hani's master inventory sheet (Item, Category, Qty, Pack Size,
-// UOM, Brand) — the catalog counterpart to the quantity-only round-trip in
-// adjustments.ts. Matches existing products BY NAME (the sheet has no id),
-// creates the ones we don't have, and updates catalog fields on the ones we
-// do. Quantity changes still flow through an Adjustment record so the audit
-// trail stays truthful and the "stock only moves with an audit row"
-// invariant holds. Always preview (dryRun) before apply; nothing in here
-// is fired without the admin seeing the plan first.
+// UOM, Brand, Supplier, Alert Threshold) — the catalog counterpart to the
+// quantity-only round-trip in adjustments.ts. Matches existing products BY
+// NAME (the sheet has no id), creates the ones we don't have, and updates
+// catalog fields on the ones we do. Quantity changes still flow through an
+// Adjustment record so the audit trail stays truthful and the "stock only
+// moves with an audit row" invariant holds. Always preview (dryRun) before
+// apply; nothing in here is fired without the admin seeing the plan first.
 
 const MAX_ROWS = 2000;
 const MAX_QTY = 1_000_000;
+const MAX_THRESHOLD = 10_000;
+const MAX_SUPPLIER_LEN = 200; // same cap the products API enforces
 
 // Hani leaves a cell blank → per the agreed rule, an empty Qty counts as 0
 // and the row is FLAGGED so Hani can fill the real value in the admin panel.
@@ -33,6 +35,11 @@ type ParsedRow = {
   packSize: number | null;
   uom: string | null;
   qty: number; // empty → 0
+  // Supplier and threshold follow the blank-means-no-change rule and are
+  // NEVER flagged: a blank supplier is legitimate, and a blank threshold on
+  // an update must not zero anything (the empty→0 rule is qty-only).
+  supplier: string | null;
+  alertThreshold: number | null;
   missing: MissingField[];
 };
 
@@ -52,11 +59,12 @@ function escapeCsvCell(value: string): string {
 }
 
 // ─── GET /api/v1/catalog/export ──────────────────────────────────────
-// Admin only — the import TEMPLATE, pre-filled with every active product in
-// the exact columns the importer reads back (Item, Category, Qty, Pack Size,
-// UOM, Brand). Hani edits in place and re-uploads; matching is by name, so a
-// row left untouched comes back as "unchanged" (its Qty already equals what's
-// on hand) — no accidental zeroing from a blank template.
+// Admin only — the master product sheet as a CSV, pre-filled with every
+// active product in the exact columns the importer reads back (Item,
+// Category, Qty, Pack Size, UOM, Brand, Supplier, Alert Threshold). Hani
+// edits in place (Excel opens CSV fine) and re-uploads; matching is by name,
+// so a row left untouched comes back as "unchanged" (its Qty already equals
+// what's on hand) — no accidental zeroing from a blank template.
 router.get("/export", requireAdmin, async (_req: AdminRequest, res: Response) => {
   try {
     const products = await prisma.product.findMany({
@@ -68,13 +76,15 @@ router.get("/export", requireAdmin, async (_req: AdminRequest, res: Response) =>
         packSize: true,
         uom: true,
         currentQty: true,
+        supplier: true,
+        alertThreshold: true,
       },
       orderBy: [{ category: "asc" }, { name: "asc" }],
     });
 
     // Header labels match the importer's column aliases exactly so the file
     // round-trips without any manual fixup.
-    const header = "Item,Category,Qty,Pack Size,UOM,Brand";
+    const header = "Item,Category,Qty,Pack Size,UOM,Brand,Supplier,Alert Threshold";
     const lines = products.map((p) =>
       [
         escapeCsvCell(p.name),
@@ -83,6 +93,8 @@ router.get("/export", requireAdmin, async (_req: AdminRequest, res: Response) =>
         p.packSize != null ? p.packSize.toString() : "",
         escapeCsvCell(p.uom ?? ""),
         escapeCsvCell(p.brand?.name ?? ""),
+        escapeCsvCell(p.supplier ?? ""),
+        String(p.alertThreshold),
       ].join(","),
     );
 
@@ -156,9 +168,11 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       if (!uom) missing.push("uom");
 
       // qty: empty → 0 (flagged). Present must be a non-negative integer.
+      // Whitespace-only counts as empty — Number("") is 0, which would slip
+      // through as an unflagged zero otherwise.
       let qty = 0;
       const qtyRaw = r.qty;
-      if (qtyRaw == null || qtyRaw === "") {
+      if (qtyRaw == null || String(qtyRaw).trim() === "") {
         missing.push("qty");
       } else {
         const n = typeof qtyRaw === "number" ? qtyRaw : Number(String(qtyRaw).trim());
@@ -173,8 +187,51 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
         qty = n;
       }
 
+      // Supplier: blank = no change (a blank supplier is legitimate — never
+      // flagged, never overwrites).
+      const supplier =
+        typeof r.supplier === "string" && r.supplier.trim() !== "" ? r.supplier.trim() : null;
+      if (supplier !== null && supplier.length > MAX_SUPPLIER_LEN) {
+        skipped.push({
+          row: rowNum,
+          item: itemRaw,
+          reason: `supplier must be at most ${MAX_SUPPLIER_LEN} characters`,
+        });
+        return;
+      }
+
+      // Alert Threshold: blank = no change on updates (schema default 10 on
+      // creates). 0 is a REAL value (alert only when empty). The empty→0
+      // rule is qty-only and must never zero a threshold — so whitespace-only
+      // counts as blank here too (Number("") would otherwise yield 0).
+      let alertThreshold: number | null = null;
+      const thresholdRaw = r.alertThreshold;
+      if (thresholdRaw != null && String(thresholdRaw).trim() !== "") {
+        const n =
+          typeof thresholdRaw === "number" ? thresholdRaw : Number(String(thresholdRaw).trim());
+        if (!Number.isInteger(n) || n < 0 || n > MAX_THRESHOLD) {
+          skipped.push({
+            row: rowNum,
+            item: itemRaw,
+            reason: `alert threshold must be an integer between 0 and ${MAX_THRESHOLD}`,
+          });
+          return;
+        }
+        alertThreshold = n;
+      }
+
       seenNames.add(lc(itemRaw));
-      parsed.push({ item: itemRaw, category, brandName, packSize: packParsed.value, uom, qty, missing });
+      parsed.push({
+        item: itemRaw,
+        category,
+        brandName,
+        packSize: packParsed.value,
+        uom,
+        qty,
+        supplier,
+        alertThreshold,
+        missing,
+      });
     });
 
     // One load of every active product, indexed by lowercased name.
@@ -188,6 +245,8 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
         packSize: true,
         uom: true,
         currentQty: true,
+        supplier: true,
+        alertThreshold: true,
       },
     });
     const byName = new Map(existing.map((p) => [lc(p.name), p]));
@@ -209,6 +268,8 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       packSize: number | null;
       uom: string | null;
       qty: number;
+      supplier: string | null;
+      alertThreshold: number | null; // null → schema default (10)
       missing: MissingField[];
     };
     type FieldChange = { from: unknown; to: unknown };
@@ -239,6 +300,8 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
           packSize: p.packSize,
           uom: p.uom,
           qty: p.qty,
+          supplier: p.supplier,
+          alertThreshold: p.alertThreshold,
           missing: p.missing,
         });
         if (p.qty === 0) zeroed++; // new product lands at 0
@@ -264,6 +327,12 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
       }
       if (p.uom && p.uom !== match.uom) {
         changes.uom = { from: match.uom, to: p.uom };
+      }
+      if (p.supplier && p.supplier !== match.supplier) {
+        changes.supplier = { from: match.supplier, to: p.supplier };
+      }
+      if (p.alertThreshold !== null && p.alertThreshold !== match.alertThreshold) {
+        changes.alertThreshold = { from: match.alertThreshold, to: p.alertThreshold };
       }
 
       const qtyDelta = p.qty - match.currentQty;
@@ -321,6 +390,9 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
               packSize: c.packSize,
               uom: c.uom,
               brandId: c.brand ? (brandIdByName.get(c.brand) ?? null) : null,
+              supplier: c.supplier,
+              // blank threshold → let the schema default (10) apply
+              ...(c.alertThreshold !== null ? { alertThreshold: c.alertThreshold } : {}),
               currentQty: 0, // ← invariant: products are born empty
             },
             select: { id: true },
@@ -355,6 +427,8 @@ router.post("/import", requireAdmin, async (req: AdminRequest, res: Response) =>
           if ("category" in u.changes) data.category = u.changes.category.to;
           if ("packSize" in u.changes) data.packSize = u.changes.packSize.to;
           if ("uom" in u.changes) data.uom = u.changes.uom.to;
+          if ("supplier" in u.changes) data.supplier = u.changes.supplier.to;
+          if ("alertThreshold" in u.changes) data.alertThreshold = u.changes.alertThreshold.to;
           if ("brand" in u.changes) {
             const bn = u.changes.brand.to as string;
             data.brandId = brandIdByName.get(bn) ?? null;

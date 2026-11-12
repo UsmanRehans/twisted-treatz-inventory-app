@@ -54,3 +54,15 @@ export function parseCsv(text: string): string[][] {
   // Drop fully-blank rows (trailing newline, stray empty lines)
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
+
+// Trigger a browser download of a server-generated CSV (shared by the
+// Product Sheet tab and the Products table's download button).
+export function downloadCsvFile(csv: string, filename: string): void {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

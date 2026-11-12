@@ -501,10 +501,12 @@ export async function importThresholds(
   });
 }
 
-// ─── Catalog import (Hani's master sheet) ─────────────────────────
-// Ingests Item/Category/Qty/Pack Size/UOM/Brand rows: creates products we
-// don't have, updates catalog fields on the ones we do, and routes the
-// counted Qty through an audited Adjustment. Always preview before apply.
+// ─── Excel Sheet (Hani's master product sheet) ────────────────────
+// Ingests Item/Category/Qty/Pack Size/UOM/Brand/Supplier/Alert Threshold
+// rows: creates products we don't have, updates catalog fields on the ones
+// we do, and routes the counted Qty through an audited Adjustment. Blank
+// cells never overwrite (except Qty, which follows the empty→0 rule).
+// Always preview before apply.
 
 export type CatalogMissingField = "qty" | "packSize" | "uom" | "brand";
 
@@ -515,6 +517,8 @@ export interface CatalogImportRow {
   packSize?: number | null;
   uom?: string | null;
   qty?: number | null;
+  supplier?: string | null;
+  alertThreshold?: number | null;
 }
 
 export interface CatalogCreate {
@@ -524,6 +528,8 @@ export interface CatalogCreate {
   packSize: number | null;
   uom: string | null;
   qty: number;
+  supplier: string | null;
+  alertThreshold: number | null;
   missing: CatalogMissingField[];
 }
 
@@ -577,9 +583,9 @@ export interface CatalogImportResult {
   summary: CatalogImportSummary;
 }
 
-// Pre-filled import template: every active product in the exact columns the
-// importer reads back (Item, Category, Qty, Pack Size, UOM, Brand). Edit in
-// place and re-upload — untouched rows come back as "unchanged".
+// The master product sheet (CSV — Excel opens it fine): every active
+// product in the exact columns the importer reads back. Edit in place and
+// re-upload — untouched rows come back as "unchanged".
 export async function exportCatalogCsv(
   token: string
 ): Promise<{ csv: string; productCount: number; exportedAt: string }> {
