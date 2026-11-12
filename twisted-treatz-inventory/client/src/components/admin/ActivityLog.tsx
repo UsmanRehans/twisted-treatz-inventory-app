@@ -139,13 +139,13 @@ export default function ActivityLog({ token }: ActivityLogProps) {
   return (
     <div>
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4 items-end">
+      <div className="grid grid-cols-2 gap-3 mb-4 items-end sm:flex sm:flex-wrap">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Type</label>
           <select
             value={type}
             onChange={(e) => setType(e.target.value as ActivityType | "all")}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           >
             <option value="all">All Activity</option>
             <option value="removal">Removals</option>
@@ -160,7 +160,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
             onChange={(e) =>
               setMemberId(e.target.value ? Number(e.target.value) : undefined)
             }
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           >
             <option value="">All Members</option>
             {members.map((m) => (
@@ -175,7 +175,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           >
             <option value="">All Categories</option>
             {categories.map((c) => (
@@ -191,7 +191,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           />
         </div>
         <div>
@@ -200,13 +200,13 @@ export default function ActivityLog({ token }: ActivityLogProps) {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
           />
         </div>
         <button
           onClick={exportCSV}
           disabled={events.length === 0}
-          className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="col-span-2 px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Export CSV
         </button>
@@ -221,7 +221,44 @@ export default function ActivityLog({ token }: ActivityLogProps) {
         </div>
       ) : (
         <>
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
+          {/* Below xl (incl. laptops with the sidebar open): one card per event */}
+          <div className="xl:hidden space-y-2">
+            {events.map((e) => (
+              <div key={e.id} className="bg-white border border-gray-200 rounded-lg px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_STYLE[e.type]}`}
+                  >
+                    {TYPE_LABEL[e.type]}
+                  </span>
+                  <span className="text-xs text-gray-500">{formatTimestamp(e.createdAt)}</span>
+                </div>
+                <div className="flex items-start justify-between gap-3 mt-1.5">
+                  <div className="min-w-0">
+                    <div className="text-gray-900 font-medium">{e.productName}</div>
+                    <div className="text-xs text-gray-500">
+                      {e.actorName} · {e.productCategory}
+                    </div>
+                    {e.note && <div className="text-xs text-gray-400 mt-0.5">{e.note}</div>}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div
+                      className={`font-mono font-semibold ${
+                        e.delta > 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {e.delta > 0 ? `+${e.delta}` : e.delta}
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono">
+                      → {e.qtyAfter != null ? e.qtyAfter : "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden xl:block border border-gray-200 rounded-lg overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -291,7 +328,7 @@ export default function ActivityLog({ token }: ActivityLogProps) {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-4 text-sm text-gray-600">
               <span>
                 Page {page} of {totalPages} ({total} total records)
               </span>

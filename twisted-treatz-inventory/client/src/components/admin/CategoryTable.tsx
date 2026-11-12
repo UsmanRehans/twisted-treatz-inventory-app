@@ -150,10 +150,12 @@ interface CategoryTableProps {
   renderActions: (p: AdminProduct) => ReactNode;
 }
 
-const COLUMNS: { field: SortField; label: string; align: "left" | "right" | "center" }[] = [
+// Unit is the least useful column, so it drops out below xl (1280px) to
+// keep the table from scrolling sideways on tablets and small laptops.
+const COLUMNS: { field: SortField; label: string; align: "left" | "right" | "center"; hideBelowXl?: boolean }[] = [
   { field: "name", label: "Product Name", align: "left" },
   { field: "brand", label: "Brand", align: "left" },
-  { field: "unit", label: "Unit", align: "left" },
+  { field: "unit", label: "Unit", align: "left", hideBelowXl: true },
   { field: "packSize", label: "Pack Size", align: "left" },
   { field: "qty", label: "Qty", align: "right" },
   { field: "threshold", label: "Threshold", align: "right" },
@@ -221,7 +223,7 @@ export default function CategoryTable({
             onToggle();
           }
         }}
-        className="flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 cursor-pointer select-none"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 sm:px-4 py-3 bg-gray-50 hover:bg-gray-100 cursor-pointer select-none"
       >
         <span className="text-gray-500 w-4">{collapsed ? "▸" : "▾"}</span>
         <h3 className="font-semibold text-gray-900">{category}</h3>
@@ -229,7 +231,7 @@ export default function CategoryTable({
           {rows.length} {rows.length === 1 ? "item" : "items"}
           {all.length !== rows.length && ` · ${all.length} products`}
         </span>
-        <div className="flex gap-1.5 ml-auto items-center">
+        <div className="flex flex-wrap gap-1.5 ml-auto items-center">
           {highRiskCount > 0 && (
             <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white">
               {highRiskCount} high risk
@@ -252,7 +254,7 @@ export default function CategoryTable({
                 setSortField("priority");
                 setAsc(true);
               }}
-              className="ml-2 text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
+              className="hidden lg:inline ml-2 text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
               title="Back to high risk first, then lowest stock"
             >
               Reset sort
@@ -262,20 +264,118 @@ export default function CategoryTable({
       </div>
 
       {!collapsed && (
-        <div className="overflow-x-auto border-t border-gray-200">
+        <div className="lg:hidden border-t border-gray-200">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <label htmlFor={`sort-${category}`} className="text-xs text-gray-500">
+              Sort
+            </label>
+            <select
+              id={`sort-${category}`}
+              value={sortField}
+              onChange={(e) => {
+                setSortField(e.target.value as SortField);
+                setAsc(true);
+              }}
+              className="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded-md bg-white text-gray-900"
+            >
+              <option value="priority">Priority (high risk first)</option>
+              {COLUMNS.map((c) => (
+                <option key={c.field} value={c.field}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            {sortField !== "priority" && (
+              <button
+                onClick={() => setAsc((v) => !v)}
+                aria-label={asc ? "Sorted ascending — tap to reverse" : "Sorted descending — tap to reverse"}
+                className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-md text-gray-600"
+              >
+                {asc ? "▲" : "▼"}
+              </button>
+            )}
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {sortedRows.map((row) => {
+              if (row.kind === "single") {
+                return (
+                  <ProductCard
+                    key={row.key}
+                    product={row.product}
+                    label={row.product.name}
+                    indent={false}
+                    renderThreshold={renderThreshold}
+                    renderActions={renderActions}
+                  />
+                );
+              }
+              const isOpen = forceOpenGroups || openGroups.has(row.key);
+              const ps = row.products;
+              const brand = common(ps, (p) => p.brand);
+              const label = row.variantLabel.toLowerCase();
+              return (
+                <li key={row.key}>
+                  <button
+                    onClick={() => toggleGroup(row.key)}
+                    aria-expanded={isOpen}
+                    className="w-full text-left flex items-start gap-2 px-3 py-3"
+                  >
+                    <span className="text-gray-400 w-4 pt-0.5">{isOpen ? "▾" : "▸"}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium text-gray-900">{row.name}</span>
+                      {ps.some((p) => p.highRisk) && <HighRiskPill />}
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        {ps.length} {label}
+                        {ps.length === 1 ? "" : "s"}
+                        {brand === null ? " · Mixed brands" : brand ? ` · ${brand}` : ""}
+                      </span>
+                    </span>
+                    <span className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className="font-mono text-lg leading-none text-gray-900">
+                        {ps.reduce((n, p) => n + p.currentQty, 0)}
+                      </span>
+                      <StatusBadge status={worstStatus(ps)} />
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <ul className="bg-gray-50/60 divide-y divide-gray-100 border-t border-gray-100">
+                      {ps
+                        .slice()
+                        .sort(sortVariants)
+                        .map((p) => (
+                          <ProductCard
+                            key={`${row.key}-${p.id}`}
+                            product={p}
+                            label={variantName(p)}
+                            indent
+                            renderThreshold={renderThreshold}
+                            renderActions={renderActions}
+                          />
+                        ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {!collapsed && (
+        <div className="hidden lg:block overflow-x-auto border-t border-gray-200">
         {/* Fixed layout keeps columns aligned across every category table;
             the min width stops the name column collapsing on narrow screens. */}
-        <table className="w-full min-w-[960px] text-sm table-fixed">
+        <table className="w-full min-w-[720px] text-sm table-fixed">
           <colgroup>
             <col className="w-8" />
             <col />
-            <col className="w-36" />
+            <col className="w-32 xl:w-36" />
+            <col className="hidden xl:table-column xl:w-24" />
+            <col className="w-20 xl:w-24" />
+            <col className="w-16 xl:w-20" />
             <col className="w-24" />
-            <col className="w-24" />
-            <col className="w-20" />
-            <col className="w-24" />
-            <col className="w-24" />
-            <col className="w-32" />
+            <col className="w-20 xl:w-24" />
+            <col className="w-28 xl:w-32" />
           </colgroup>
           <thead className="border-b border-gray-200">
             <tr>
@@ -284,7 +384,7 @@ export default function CategoryTable({
                 <th
                   key={c.field}
                   onClick={() => handleSort(c.field)}
-                  className={`${ALIGN[c.align]} px-4 py-2.5 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none whitespace-nowrap`}
+                  className={`${ALIGN[c.align]} ${c.hideBelowXl ? "hidden xl:table-cell" : ""} px-4 py-2.5 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none whitespace-nowrap`}
                   title={`Sort ${category} by ${c.label.toLowerCase()}`}
                 >
                   {c.label}
@@ -328,7 +428,7 @@ export default function CategoryTable({
                     <td className="px-4 py-2.5 text-gray-600 truncate">
                       {brand === null ? <span className="text-gray-400">Mixed</span> : brand || MUTED_DASH}
                     </td>
-                    <td className="px-4 py-2.5 text-gray-600 truncate">
+                    <td className="hidden xl:table-cell px-4 py-2.5 text-gray-600 truncate">
                       {unit ?? <span className="text-gray-400">Mixed</span>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-600 truncate">{pack ?? MUTED_DASH}</td>
@@ -393,7 +493,7 @@ function ProductRow({
         {product.highRisk && <HighRiskPill />}
       </td>
       <td className="px-4 py-2.5 text-gray-600 truncate">{product.brand ?? MUTED_DASH}</td>
-      <td className="px-4 py-2.5 text-gray-600 truncate">{product.purchaseUnit}</td>
+      <td className="hidden xl:table-cell px-4 py-2.5 text-gray-600 truncate">{product.purchaseUnit}</td>
       <td className="px-4 py-2.5 text-gray-600 truncate">{formatPackSize(product) ?? MUTED_DASH}</td>
       <td className="px-4 py-2.5 text-right text-gray-900 font-mono">{product.currentQty}</td>
       <td className="px-4 py-2.5 text-right">{renderThreshold(product)}</td>
@@ -402,5 +502,44 @@ function ProductRow({
       </td>
       <td className="px-4 py-2.5 text-center whitespace-nowrap">{renderActions(product)}</td>
     </tr>
+  );
+}
+
+// Phone layout: name and details on the left, qty + status on the right,
+// threshold and actions on a third line.
+function ProductCard({
+  product,
+  label,
+  indent,
+  renderThreshold,
+  renderActions,
+}: {
+  product: AdminProduct;
+  label: string;
+  indent: boolean;
+  renderThreshold: (p: AdminProduct) => ReactNode;
+  renderActions: (p: AdminProduct) => ReactNode;
+}) {
+  const details = [product.brand, formatPackSize(product), product.purchaseUnit].filter(Boolean);
+  return (
+    <li className={`py-3 pr-3 ${indent ? "pl-12" : "pl-9"} ${product.active ? "" : "opacity-50"}`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <span className={indent ? "text-gray-700" : "font-medium text-gray-900"}>{label}</span>
+          {product.highRisk && <HighRiskPill />}
+          {details.length > 0 && (
+            <div className="text-xs text-gray-500 mt-0.5">{details.join(" · ")}</div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <span className="font-mono text-lg leading-none text-gray-900">{product.currentQty}</span>
+          <StatusBadge status={productStatus(product)} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-1.5 text-xs text-gray-500">
+        <span className="flex items-center gap-1">Alert at {renderThreshold(product)}</span>
+        <span className="whitespace-nowrap">{renderActions(product)}</span>
+      </div>
+    </li>
   );
 }

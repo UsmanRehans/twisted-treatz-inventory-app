@@ -103,18 +103,18 @@ export default function AddProductModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-white sm:rounded-lg shadow-xl w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-white px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Add Product</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="w-10 h-10 -mr-2 flex items-center justify-center text-gray-400 hover:text-gray-600 text-2xl leading-none"
             aria-label="Close"
           >
             ×

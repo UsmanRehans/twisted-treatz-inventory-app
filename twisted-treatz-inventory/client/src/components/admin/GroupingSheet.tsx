@@ -94,7 +94,7 @@ export default function GroupingSheet({ token, onChanged, children }: GroupingSh
     <div className="mb-4">
       <div className="flex items-center gap-3 flex-wrap">
         {children}
-        <div className="flex gap-2 ml-auto">
+        <div className="hidden sm:flex flex-wrap gap-2 ml-auto">
           <button
             onClick={handleDownload}
             disabled={busy}

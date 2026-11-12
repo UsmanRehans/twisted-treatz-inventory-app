@@ -145,8 +145,8 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
       )}
 
       {/* Step 1: Download */}
-      <div className="mb-4 p-5 border border-gray-200 rounded-lg bg-white">
-        <div className="flex items-center justify-between gap-4">
+      <div className="mb-4 p-4 sm:p-5 border border-gray-200 rounded-lg bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h3 className="font-medium text-gray-900">1. Download current thresholds</h3>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -165,8 +165,8 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
       </div>
 
       {/* Step 2: Upload */}
-      <div className="p-5 border border-gray-200 rounded-lg bg-white">
-        <div className="flex items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 border border-gray-200 rounded-lg bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h3 className="font-medium text-gray-900">2. Upload your edited file</h3>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -232,7 +232,7 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
 
           {/* Applied table */}
           {preview.applied.length > 0 && (
-            <div className="border border-gray-200 rounded-lg overflow-hidden mb-4 max-h-96 overflow-y-auto">
+            <div className="border border-gray-200 rounded-lg overflow-auto mb-4 max-h-96">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                   <tr>
@@ -300,7 +300,7 @@ export default function ThresholdUpdate({ token }: ThresholdUpdateProps) {
           )}
 
           {/* Apply */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={handleApply}
               disabled={busy || noChanges || !zeroConfirmed}
