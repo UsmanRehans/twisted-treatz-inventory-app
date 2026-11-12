@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   fetchAdminProducts,
   fetchAdminCategories,
@@ -10,51 +10,33 @@ import type { AdminProduct, Brand } from "../../api/adminClient";
 import { downloadCsvFile } from "../../lib/csv";
 import AddProductModal from "./AddProductModal";
 import EditProductModal from "./EditProductModal";
-import MenuView from "./MenuView";
+import CategoryTable, { type CategoryRow } from "./CategoryTable";
+import GroupingSheet from "./GroupingSheet";
 
 interface ProductTableProps {
   token: string;
 }
 
-type SortField = "name" | "category" | "currentQty";
-type SortOrder = "asc" | "desc";
+// View preferences are per-browser conveniences; storage can be blocked
+// (private window), so every access is guarded and defaults still work.
+const COLLAPSED_KEY = "tt.products.collapsedCategories";
+const GROUP_KEY = "tt.products.groupFlavors";
 
-// Render packSize + uom as a compact label: "18 ct", "30 lb", "26.4 oz".
-// packSize is a Decimal serialized to a string; Number() strips trailing zeros.
-function formatPackSize(product: AdminProduct): string | null {
-  if (product.packSize === null) return null;
-  const size = Number(product.packSize);
-  if (isNaN(size)) return null;
-  return product.uom ? `${size} ${product.uom}` : String(size);
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    return fallback;
+  }
 }
 
-function getStatusBadge(product: AdminProduct) {
-  if (!product.active) {
-    return (
-      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-gray-200 text-gray-600">
-        Inactive
-      </span>
-    );
+function writeStored(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore — preference just won't persist
   }
-  if (product.currentQty === 0) {
-    return (
-      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">
-        Out
-      </span>
-    );
-  }
-  if (product.currentQty <= product.alertThreshold) {
-    return (
-      <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">
-        Low
-      </span>
-    );
-  }
-  return (
-    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">
-      OK
-    </span>
-  );
 }
 
 export default function ProductTable({ token }: ProductTableProps) {
@@ -64,8 +46,6 @@ export default function ProductTable({ token }: ProductTableProps) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [brandId, setBrandId] = useState<string>("All");
-  const [sortField, setSortField] = useState<SortField>("name");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -76,10 +56,14 @@ export default function ProductTable({ token }: ProductTableProps) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [highRiskOnly, setHighRiskOnly] = useState(false);
-  // Two lenses on the same products: Hani's Menu (flavors folded under one
-  // item) and the flat All Products table. Menu is the default.
-  const [view, setView] = useState<"menu" | "all">("menu");
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(readStored<string[]>(COLLAPSED_KEY, [])),
+  );
+  const [groupFlavors, setGroupFlavors] = useState<boolean>(() => readStored(GROUP_KEY, true));
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => writeStored(COLLAPSED_KEY, [...collapsed]), [collapsed]);
+  useEffect(() => writeStored(GROUP_KEY, groupFlavors), [groupFlavors]);
 
   // Same sheet as the Product Sheet tab (download-only here — uploads live
   // on that tab with the preview): every active product, ready to bulk-edit.
@@ -102,22 +86,26 @@ export default function ProductTable({ token }: ProductTableProps) {
       category,
       brandId: brandId !== "All" ? Number(brandId) : undefined,
       search,
-      sort: sortField,
-      order: sortOrder,
+      sort: "name",
+      order: "asc",
       includeInactive: showInactive,
     })
       .then(setProducts)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [token, category, brandId, search, sortField, sortOrder, showInactive]);
+  }, [token, category, brandId, search, showInactive]);
 
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
 
-  useEffect(() => {
+  const loadCategories = useCallback(() => {
     fetchAdminCategories(token).then(setCategories).catch(console.error);
   }, [token]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   const loadBrands = useCallback(() => {
     fetchBrands(token).then(setBrands).catch(console.error);
@@ -133,20 +121,6 @@ export default function ProductTable({ token }: ProductTableProps) {
       inputRef.current.select();
     }
   }, [editingId]);
-
-  function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortOrder("asc");
-    }
-  }
-
-  function sortIndicator(field: SortField) {
-    if (sortField !== field) return "";
-    return sortOrder === "asc" ? " ^" : " v";
-  }
 
   function startEdit(product: AdminProduct) {
     setEditingId(product.id);
@@ -165,9 +139,7 @@ export default function ProductTable({ token }: ProductTableProps) {
       const updated = await updateProduct(token, productId, {
         alertThreshold: threshold,
       });
-      setProducts((prev) =>
-        prev.map((p) => (p.id === productId ? updated : p))
-      );
+      setProducts((prev) => prev.map((p) => (p.id === productId ? updated : p)));
     } catch (err) {
       console.error("Failed to update threshold:", err);
     } finally {
@@ -176,28 +148,131 @@ export default function ProductTable({ token }: ProductTableProps) {
     }
   }
 
-  // Pagination
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
-  // High-risk filter is client-side: the list is already fully loaded.
-  const visible = highRiskOnly ? products.filter((p) => p.highRisk) : products;
-  const totalPages = Math.ceil(visible.length / pageSize);
-  const paged = visible.slice((page - 1) * pageSize, page * pageSize);
-
-  // Reset to page 1 on filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, category, brandId, sortField, sortOrder, showInactive, highRiskOnly]);
-
   function handleSaved(updated: AdminProduct) {
     if (!updated.active && !showInactive) {
       // Deactivated while the inactive filter is off — drop it from view.
       setProducts((prev) => prev.filter((p) => p.id !== updated.id));
     } else {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === updated.id ? updated : p))
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    }
+  }
+
+  // One table per category. With "Group flavors" on, products sharing a
+  // group fold into one expandable row; the high-risk filter keeps only
+  // flagged products (a group shows just its flagged flavors).
+  const sections = useMemo(() => {
+    const visible = highRiskOnly ? products.filter((p) => p.highRisk) : products;
+    const byCategory = new Map<string, CategoryRow[]>();
+    const push = (cat: string, row: CategoryRow) => {
+      const list = byCategory.get(cat);
+      if (list) list.push(row);
+      else byCategory.set(cat, [row]);
+    };
+
+    const groups = new Map<number, { name: string; variantLabel: string; products: AdminProduct[] }>();
+    for (const p of visible) {
+      if (groupFlavors && p.group) {
+        const g = groups.get(p.group.id);
+        if (g) g.products.push(p);
+        else
+          groups.set(p.group.id, {
+            name: p.group.name,
+            variantLabel: p.group.variantLabel,
+            products: [p],
+          });
+      } else {
+        push(p.category, { kind: "single", key: `p${p.id}`, product: p });
+      }
+    }
+    for (const [id, g] of groups) {
+      // A group with one visible member reads better as a plain row.
+      if (g.products.length === 1) {
+        const p = g.products[0];
+        push(p.category, { kind: "single", key: `p${p.id}`, product: p });
+      } else {
+        // After an import every variant shares the group's category.
+        push(g.products[0].category, { kind: "group", key: `g${id}`, ...g });
+      }
+    }
+
+    return [...byCategory.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([cat, rows]) => ({ category: cat, rows }));
+  }, [products, highRiskOnly, groupFlavors]);
+
+  const allCollapsed = sections.length > 0 && sections.every((s) => collapsed.has(s.category));
+  const productCount = sections.reduce(
+    (n, s) => n + s.rows.reduce((m, r) => m + (r.kind === "group" ? r.products.length : 1), 0),
+    0,
+  );
+
+  function toggleCategory(cat: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  function renderThreshold(product: AdminProduct) {
+    if (editingId === product.id) {
+      return (
+        <input
+          ref={inputRef}
+          type="number"
+          min="0"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={() => saveThreshold(product.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveThreshold(product.id);
+            if (e.key === "Escape") setEditingId(null);
+          }}
+          className="w-16 px-2 py-1 border border-indigo-400 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+          disabled={savingId === product.id}
+        />
       );
     }
+    return (
+      <button
+        onClick={() => startEdit(product)}
+        className="font-mono text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 px-2 py-0.5 rounded cursor-pointer transition-colors"
+        title="Click to edit threshold"
+      >
+        {product.alertThreshold}
+      </button>
+    );
+  }
+
+  function renderActions(product: AdminProduct) {
+    return (
+      <>
+        <button
+          onClick={() => setEditingProduct(product)}
+          className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded text-sm transition-colors"
+          title="Edit product details"
+        >
+          Edit
+        </button>
+        {!product.active && (
+          <button
+            onClick={async () => {
+              try {
+                const updated = await updateProduct(token, product.id, { active: true });
+                handleSaved(updated);
+              } catch (err) {
+                console.error("Failed to reactivate:", err);
+              }
+            }}
+            className="ml-1 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-sm transition-colors"
+            title="Reactivate product"
+          >
+            Reactivate
+          </button>
+        )}
+      </>
+    );
   }
 
   return (
@@ -207,43 +282,9 @@ export default function ProductTable({ token }: ProductTableProps) {
           {exportError}
         </div>
       )}
-      {/* View toggle */}
-      <div className="mb-4">
-        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden text-sm font-medium">
-          <button
-            onClick={() => setView("menu")}
-            className={`px-4 py-2 ${
-              view === "menu" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Menu
-          </button>
-          <button
-            onClick={() => setView("all")}
-            className={`px-4 py-2 border-l border-gray-300 ${
-              view === "all" ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            All Products
-          </button>
-        </div>
-      </div>
 
-      {view === "menu" && (
-        <MenuView
-          token={token}
-          products={products.filter((p) => p.active)}
-          loading={loading}
-          onChanged={() => {
-            loadProducts();
-            fetchAdminCategories(token).then(setCategories).catch(console.error);
-          }}
-        />
-      )}
-
-      <div className={view === "all" ? "" : "hidden"}>
       {/* Filters */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-3">
         <input
           type="text"
           placeholder="Search products..."
@@ -309,6 +350,39 @@ export default function ProductTable({ token }: ProductTableProps) {
         </button>
       </div>
 
+      {/* View controls + grouping sheet */}
+      <GroupingSheet
+        token={token}
+        onChanged={() => {
+          loadProducts();
+          loadCategories();
+        }}
+      >
+        <button
+          onClick={() =>
+            setCollapsed(allCollapsed ? new Set() : new Set(sections.map((s) => s.category)))
+          }
+          disabled={sections.length === 0}
+          className="px-3 py-1.5 bg-white text-gray-700 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+        >
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={groupFlavors}
+            onChange={(e) => setGroupFlavors(e.target.checked)}
+            className="accent-indigo-600"
+          />
+          Group flavors
+        </label>
+        <span className="text-xs text-gray-500 whitespace-nowrap">
+          {loading
+            ? "Loading..."
+            : `${productCount} products in ${sections.length} ${sections.length === 1 ? "category" : "categories"}`}
+        </span>
+      </GroupingSheet>
+
       {showAddModal && (
         <AddProductModal
           token={token}
@@ -332,179 +406,27 @@ export default function ProductTable({ token }: ProductTableProps) {
         />
       )}
 
-      {/* Table */}
-      {loading ? (
+      {/* One table per category */}
+      {loading && products.length === 0 ? (
         <div className="text-center text-gray-500 py-8">Loading products...</div>
+      ) : sections.length === 0 ? (
+        <div className="text-center text-gray-500 py-8">No products match these filters.</div>
       ) : (
-        <>
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th
-                    className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
-                    onClick={() => handleSort("name")}
-                  >
-                    Product Name{sortIndicator("name")}
-                  </th>
-                  <th
-                    className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
-                    onClick={() => handleSort("category")}
-                  >
-                    Category{sortIndicator("category")}
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
-                    Brand
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
-                    Unit
-                  </th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
-                    Pack Size
-                  </th>
-                  <th
-                    className="text-right px-4 py-3 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
-                    onClick={() => handleSort("currentQty")}
-                  >
-                    Qty{sortIndicator("currentQty")}
-                  </th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">
-                    Threshold
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">
-                    Status
-                  </th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {paged.map((product) => (
-                  <tr
-                    key={product.id}
-                    className={`hover:bg-gray-50 transition-colors ${
-                      product.active ? "" : "opacity-50 bg-gray-50"
-                    }`}
-                  >
-                    <td className="px-4 py-2.5 text-gray-900 font-medium">
-                      {product.name}
-                      {product.highRisk && (
-                        <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white align-middle whitespace-nowrap">
-                          High risk
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600">
-                      {product.category}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600">
-                      {product.brand ?? <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600">
-                      {product.purchaseUnit}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600">
-                      {formatPackSize(product) ?? (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-gray-900 font-mono">
-                      {product.currentQty}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      {editingId === product.id ? (
-                        <input
-                          ref={inputRef}
-                          type="number"
-                          min="0"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={() => saveThreshold(product.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveThreshold(product.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          className="w-16 px-2 py-1 border border-indigo-400 rounded text-right text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
-                          disabled={savingId === product.id}
-                        />
-                      ) : (
-                        <button
-                          onClick={() => startEdit(product)}
-                          className="font-mono text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 px-2 py-0.5 rounded cursor-pointer transition-colors"
-                          title="Click to edit threshold"
-                        >
-                          {product.alertThreshold}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      {getStatusBadge(product)}
-                    </td>
-                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => setEditingProduct(product)}
-                        className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded text-sm transition-colors"
-                        title="Edit product details"
-                      >
-                        Edit
-                      </button>
-                      {!product.active && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              const updated = await updateProduct(
-                                token,
-                                product.id,
-                                { active: true }
-                              );
-                              handleSaved(updated);
-                            } catch (err) {
-                              console.error("Failed to reactivate:", err);
-                            }
-                          }}
-                          className="ml-1 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-sm transition-colors"
-                          title="Reactivate product"
-                        >
-                          Reactivate
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
-              <span>
-                Showing {(page - 1) * pageSize + 1}-
-                {Math.min(page * pageSize, visible.length)} of{" "}
-                {visible.length} products
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+        <div className="space-y-4">
+          {sections.map((s) => (
+            <CategoryTable
+              key={s.category}
+              category={s.category}
+              rows={s.rows}
+              collapsed={collapsed.has(s.category)}
+              onToggle={() => toggleCategory(s.category)}
+              forceOpenGroups={search.trim() !== "" || highRiskOnly}
+              renderThreshold={renderThreshold}
+              renderActions={renderActions}
+            />
+          ))}
+        </div>
       )}
-      </div>
     </div>
   );
 }
