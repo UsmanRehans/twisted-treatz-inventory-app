@@ -28,7 +28,7 @@ export const ADMIN_TABS: { id: AdminTab; label: string; icon: string }[] = [
   { id: "activity", label: "Activity Log", icon: "[>]" },
   { id: "receiving", label: "Receiving", icon: "[+]" },
   { id: "bulk", label: "Bulk Update", icon: "[~]" },
-  { id: "catalog", label: "Import Catalog", icon: "[^]" },
+  { id: "catalog", label: "Product Sheet", icon: "[^]" },
   { id: "thresholds", label: "Thresholds", icon: "[%]" },
 ];
 

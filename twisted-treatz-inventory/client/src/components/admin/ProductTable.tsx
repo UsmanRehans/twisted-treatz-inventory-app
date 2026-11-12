@@ -4,8 +4,10 @@ import {
   fetchAdminCategories,
   fetchBrands,
   updateProduct,
+  exportCatalogCsv,
 } from "../../api/adminClient";
 import type { AdminProduct, Brand } from "../../api/adminClient";
+import { downloadCsvFile } from "../../lib/csv";
 import AddProductModal from "./AddProductModal";
 import EditProductModal from "./EditProductModal";
 
@@ -70,8 +72,25 @@ export default function ProductTable({ token }: ProductTableProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [highRiskOnly, setHighRiskOnly] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Same sheet as the Product Sheet tab (download-only here — uploads live
+  // on that tab with the preview): every active product, ready to bulk-edit.
+  async function handleDownloadSheet() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const { csv } = await exportCatalogCsv(token);
+      downloadCsvFile(csv, `catalog-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Could not download the sheet");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const loadProducts = useCallback(() => {
     setLoading(true);
@@ -179,6 +198,11 @@ export default function ProductTable({ token }: ProductTableProps) {
 
   return (
     <div>
+      {exportError && (
+        <div className="mb-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+          {exportError}
+        </div>
+      )}
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <input
@@ -230,6 +254,14 @@ export default function ProductTable({ token }: ProductTableProps) {
           />
           High risk only
         </label>
+        <button
+          onClick={handleDownloadSheet}
+          disabled={exporting}
+          title="Download the master product sheet (CSV, opens in Excel) — edit it, then upload it on the Product Sheet tab"
+          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+        >
+          {exporting ? "Exporting…" : "Download Sheet"}
+        </button>
         <button
           onClick={() => setShowAddModal(true)}
           className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 whitespace-nowrap"

@@ -6,6 +6,7 @@ import {
   type CatalogImportResult,
 } from "../../api/adminClient";
 import { parseInventorySheet } from "../../lib/sheet";
+import { downloadCsvFile } from "../../lib/csv";
 
 interface CatalogImportProps {
   token: string;
@@ -41,20 +42,14 @@ export default function CatalogImport({ token }: CatalogImportProps) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  async function handleDownloadTemplate() {
+  async function handleDownloadSheet() {
     setBusy(true);
     setError(null);
     try {
       const { csv } = await exportCatalogCsv(token);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `catalog-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadCsvFile(csv, `catalog-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not download the template");
+      setError(e instanceof Error ? e.message : "Could not download the sheet");
     } finally {
       setBusy(false);
     }
@@ -107,14 +102,16 @@ export default function CatalogImport({ token }: CatalogImportProps) {
   return (
     <div className="max-w-4xl">
       <div className="mb-6 text-sm text-gray-600 leading-relaxed">
-        Upload Hani's inventory sheet (<span className="font-mono">.xlsx</span> or{" "}
-        <span className="font-mono">.csv</span>) with columns{" "}
-        <span className="font-mono text-gray-800">Item, Category, Qty, Pack Size, UOM, Brand</span>.
-        We match by item name: products we already have are updated, new ones are
-        created, and the counted Qty is recorded in the Activity Log. A blank Qty
-        is treated as 0 and flagged. Nothing is saved until you review the preview.
-        Don't have a sheet handy? Download the template below — it's pre-filled
-        with every current item so you can add new rows and edit in place.
+        This is the master product sheet (
+        <span className="font-mono">.csv</span> — opens in Excel). Download
+        it, edit, upload it back. Columns:{" "}
+        <span className="font-mono text-gray-800">
+          Item, Category, Qty, Pack Size, UOM, Brand, Supplier, Alert Threshold
+        </span>
+        . We match by item name: products we already have are updated, new ones
+        are created, and the counted Qty is recorded in the Activity Log. A
+        blank Qty is treated as 0 and flagged; any other blank cell leaves the
+        existing value alone. Nothing is saved until you review the preview.
       </div>
 
       {error && (
@@ -127,18 +124,19 @@ export default function CatalogImport({ token }: CatalogImportProps) {
       <div className="mb-4 p-5 border border-gray-200 rounded-lg bg-white">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="font-medium text-gray-900">Download template</h3>
+            <h3 className="font-medium text-gray-900">Download product sheet</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              A CSV pre-filled with every current item and its on-hand Qty. Add
-              new rows, edit what changed, then upload it below.
+              A CSV (opens in Excel) pre-filled with every current item and
+              its on-hand Qty. Add new rows, edit what changed, then upload
+              it below.
             </p>
           </div>
           <button
-            onClick={handleDownloadTemplate}
+            onClick={handleDownloadSheet}
             disabled={busy}
             className="shrink-0 px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-200 disabled:opacity-50 cursor-pointer transition-colors"
           >
-            Download template
+            Download sheet
           </button>
         </div>
       </div>
@@ -182,8 +180,8 @@ export default function CatalogImport({ token }: CatalogImportProps) {
 
           {missingCols.length > 0 && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
-              The sheet had no <strong>{missingCols.join(", ")}</strong> column — those
-              fields are left blank and flagged for you to fill in the admin panel.
+              The sheet had no <strong>{missingCols.join(", ")}</strong> column — blank
+              cells never overwrite existing values (a blank Qty still counts as 0).
             </p>
           )}
 
@@ -202,7 +200,7 @@ export default function CatalogImport({ token }: CatalogImportProps) {
           {preview.creates.length > 0 && (
             <PreviewTable
               title={`New products (${preview.creates.length})`}
-              head={["Item", "Category", "Brand", "Pack", "UOM", "Qty"]}
+              head={["Item", "Category", "Brand", "Pack", "UOM", "Qty", "Supplier", "Threshold"]}
               rows={preview.creates.map((c) => [
                 c.item,
                 c.category ?? "—",
@@ -210,6 +208,8 @@ export default function CatalogImport({ token }: CatalogImportProps) {
                 c.packSize ?? "—",
                 c.uom ?? "—",
                 c.qty,
+                c.supplier ?? "—",
+                c.alertThreshold ?? "10 (default)",
               ])}
             />
           )}

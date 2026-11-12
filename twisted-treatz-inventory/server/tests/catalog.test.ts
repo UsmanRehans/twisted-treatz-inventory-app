@@ -39,6 +39,8 @@ const existingProducts = [
     packSize: 30,
     uom: "lb",
     currentQty: 7,
+    supplier: "Sam's Club",
+    alertThreshold: 10,
   },
 ];
 
@@ -91,29 +93,32 @@ describe("GET /api/v1/catalog/export — pre-filled template", () => {
 
   it("emits a BOM + the importer's column headers and one row per active product", async () => {
     mockPrisma.product.findMany.mockResolvedValue([
-      { name: "Sour Patch Bulk", category: "Sour Candy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 4 },
-      { name: "Gummy Bears Bulk", category: "Gummy", brand: null, packSize: null, uom: null, currentQty: 100 },
+      { name: "Sour Patch Bulk", category: "Sour Candy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 4, supplier: "Costco", alertThreshold: 12 },
+      { name: "Gummy Bears Bulk", category: "Gummy", brand: null, packSize: null, uom: null, currentQty: 100, supplier: null, alertThreshold: 10 },
     ]);
     const res = await request(app).get("/api/v1/catalog/export").set(auth(adminToken));
     expect(res.status).toBe(200);
     const csv: string = res.body.data.csv;
     expect(csv.charCodeAt(0)).toBe(0xfeff); // UTF-8 BOM
     // Headers match the importer's aliases exactly so the file round-trips.
-    expect(csv).toContain("Item,Category,Qty,Pack Size,UOM,Brand");
-    // Qty is pre-filled with on-hand; blank brand/pack/uom export as empty cells.
-    expect(csv).toContain(`"Sour Patch Bulk","Sour Candy",4,5,"lb","Boston"`);
-    expect(csv).toContain(`"Gummy Bears Bulk","Gummy",100,,"",""`);
+    expect(csv).toContain("Item,Category,Qty,Pack Size,UOM,Brand,Supplier,Alert Threshold");
+    // Qty is pre-filled with on-hand; blank brand/pack/uom/supplier export as
+    // empty cells; threshold is always present (schema default 10).
+    expect(csv).toContain(`"Sour Patch Bulk","Sour Candy",4,5,"lb","Boston","Costco",12`);
+    expect(csv).toContain(`"Gummy Bears Bulk","Gummy",100,,"","","",10`);
     expect(res.body.data.productCount).toBe(2);
   });
 
-  it("neutralizes formula-injection cells (= + - @)", async () => {
+  it("neutralizes formula-injection cells (= + - @), including the supplier column", async () => {
     mockPrisma.product.findMany.mockResolvedValue([
-      { name: "=cmd|'/c calc'!A1", category: "Gummy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 3 },
+      { name: "=cmd|'/c calc'!A1", category: "Gummy", brand: { name: "Boston" }, packSize: 5, uom: "lb", currentQty: 3, supplier: "+HYPERLINK(evil)", alertThreshold: 10 },
     ]);
     const res = await request(app).get("/api/v1/catalog/export").set(auth(adminToken));
     const csv: string = res.body.data.csv;
     expect(csv).toContain(`"'=cmd|'`);
     expect(csv).not.toContain(`,=cmd`);
+    expect(csv).toContain(`"'+HYPERLINK`);
+    expect(csv).not.toContain(`,+HYPERLINK`);
   });
 });
 
@@ -278,6 +283,103 @@ describe("catalog import — empty cells", () => {
     // No catalog changes proposed — blanks never clobber existing data
     expect(res.body.data.summary.updates).toBe(0);
     expect(res.body.data.unchanged).toBe(1);
+  });
+});
+
+// ─── Supplier & Alert Threshold columns ─────────────────────────
+// Blank = no change (never flagged, never zeroed — the empty→0 rule is
+// qty-only). Threshold 0 is a real value. Creates without a threshold get
+// the schema default (10).
+describe("catalog import — supplier & alert threshold", () => {
+  it("updates supplier and threshold when provided and different", async () => {
+    const res = await importCatalog({
+      rows: [{ item: "Fruit Slices Assorted", brand: "Boston", packSize: 30, uom: "lb", qty: 7, supplier: "Webstaurant", alertThreshold: 25 }],
+    });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: expect.objectContaining({ supplier: "Webstaurant", alertThreshold: 25 }) }),
+    );
+    // Catalog-only change → no stock movement
+    expect(mockPrisma.adjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts threshold 0 as a real value (alert only when empty)", async () => {
+    const res = await importCatalog({
+      dryRun: true,
+      rows: [{ item: "Fruit Slices Assorted", qty: 7, alertThreshold: 0 }],
+    });
+    expect(res.body.data.updates[0].changes.alertThreshold).toEqual({ from: 10, to: 0 });
+  });
+
+  it("treats a blank threshold/supplier as no change — never flags, never zeroes", async () => {
+    const res = await importCatalog({
+      dryRun: true,
+      rows: [{ item: "Fruit Slices Assorted", brand: "Boston", packSize: 30, uom: "lb", qty: 7 }],
+    });
+    // supplier "Sam's Club" and threshold 10 survive untouched
+    expect(res.body.data.summary.updates).toBe(0);
+    expect(res.body.data.unchanged).toBe(1);
+    expect(res.body.data.flagged).toHaveLength(0);
+  });
+
+  it("treats a whitespace-only threshold as blank (no change), never as 0", async () => {
+    const res = await importCatalog({
+      dryRun: true,
+      rows: [{ item: "Fruit Slices Assorted", brand: "Boston", packSize: 30, uom: "lb", qty: 7, alertThreshold: "   " }],
+    });
+    // Blank must not zero the threshold — the empty→0 rule is qty-only.
+    expect(res.body.data.summary.updates).toBe(0);
+    expect(res.body.data.unchanged).toBe(1);
+    expect(res.body.data.skipped).toHaveLength(0);
+  });
+
+  it("skips a row whose supplier exceeds the 200-char cap (products API parity)", async () => {
+    const res = await importCatalog({
+      dryRun: true,
+      rows: [{ item: "Fruit Slices Assorted", qty: 7, supplier: "x".repeat(201) }],
+    });
+    expect(res.body.data.skipped[0].reason).toContain("supplier");
+  });
+
+  it("skips a row with an invalid threshold but keeps good rows", async () => {
+    const res = await importCatalog({
+      rows: [
+        { item: "Bad Threshold", category: "Gummy", brand: "Boston", packSize: 1, uom: "lb", qty: 1, alertThreshold: -5 },
+        { item: "Good Threshold", category: "Gummy", brand: "Boston", packSize: 1, uom: "lb", qty: 1, alertThreshold: 15 },
+      ],
+    });
+    expect(res.body.data.summary.errors).toBe(1);
+    expect(res.body.data.summary.creates).toBe(1);
+  });
+
+  it("creates with the provided threshold + supplier, or leaves threshold to the schema default", async () => {
+    await importCatalog({
+      rows: [
+        { item: "With Threshold", category: "Gummy", brand: "Boston", packSize: 1, uom: "lb", qty: 1, supplier: "Target", alertThreshold: 5 },
+        { item: "Without Threshold", category: "Gummy", brand: "Boston", packSize: 1, uom: "lb", qty: 1 },
+      ],
+    });
+    expect(mockPrisma.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ name: "With Threshold", supplier: "Target", alertThreshold: 5 }) }),
+    );
+    // No threshold in the sheet → the create must NOT pass one (schema default 10)
+    const withoutCall = mockPrisma.product.create.mock.calls.find(
+      (c: [{ data: Record<string, unknown> }]) => c[0].data.name === "Without Threshold",
+    );
+    expect(withoutCall![0].data).not.toHaveProperty("alertThreshold");
+  });
+
+  it("golden round-trip: an untouched export re-imports as 100% unchanged with zero flags", async () => {
+    // Rows shaped exactly like the export payload for the existing product.
+    const res = await importCatalog({
+      dryRun: true,
+      rows: [{ item: "Fruit Slices Assorted", category: "Gummy", brand: "Boston", packSize: 30, uom: "lb", qty: 7, supplier: "Sam's Club", alertThreshold: 10 }],
+    });
+    expect(res.body.data.summary.creates).toBe(0);
+    expect(res.body.data.summary.updates).toBe(0);
+    expect(res.body.data.unchanged).toBe(1);
+    expect(res.body.data.flagged).toHaveLength(0);
+    expect(res.body.data.skipped).toHaveLength(0);
   });
 });
 
