@@ -1,5 +1,7 @@
-// Blessed recovery path for a locked-out admin (no SMTP = no self-service
-// reset). Run from the Railway shell or locally against the prod DB.
+// Blessed recovery path for a locked-out admin when the emailed self-service
+// reset (forgot-password flow in src/routes/auth.ts) cannot be used, e.g.
+// SendGrid is not configured. Run from the Railway shell or locally against
+// the prod DB.
 //
 //   npx tsx --env-file=.env scripts/reset-admin-password.ts <email> [newPassword]
 //

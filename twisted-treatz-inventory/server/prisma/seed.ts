@@ -206,7 +206,8 @@ async function main() {
   // ─── Seed Team Members ─────────────────────────────────────────────
   // Names only — PINs are assigned by the admin via the dashboard after
   // seeding, so no credential ever lives in source. Skips if members
-  // already exist, so the audit log (removals) is never wiped.
+  // already exist. (Removals themselves are NOT preserved — the product
+  // reset above deletes every removal, receipt and alert-log row.)
   console.log("\n--- Seeding team members ---");
   const existingMemberCount = await prisma.teamMember.count();
   if (existingMemberCount > 0) {

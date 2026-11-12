@@ -85,11 +85,13 @@ NOT a storefront. No Shopify, no checkout, no customer pages.
 - **Alerts**: SendGrid low-stock email (at-or-below threshold, once/day).
 - **Money**: Prisma `Decimal`, never Float. **Time**: stored UTC, displayed
   America/Chicago.
-- **Current data model**: Product, TeamMember, Admin, Removal (with
-  qtyBefore/qtyAfter snapshots), Receipt (expected vs actual qty), AlertLog.
+- **Current data model**: Product (with packSize/uom, active, highRisk),
+  Brand (first-class, soft-deleted), TeamMember, Admin, Removal (with
+  qtyBefore/qtyAfter snapshots), Receipt (expected vs actual qty), Adjustment
+  (admin corrections: cycle count, bulk CSV, catalog import), AlertLog.
 
 When a feature you're proposing maps onto a concept the app already has
-(reorder points → alertThreshold, stock movements → Removal/Receipt), extend
+(reorder points → alertThreshold, stock movements → Removal/Receipt/Adjustment), extend
 the existing model rather than bolting on a parallel one. If a new concept is
 genuinely needed (variants, locations, lots/expiry, suppliers-as-a-table,
 purchase orders), say so explicitly and design the migration.

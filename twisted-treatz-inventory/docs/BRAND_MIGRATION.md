@@ -7,10 +7,18 @@ procedure. The rename in step 2 makes the currently-deployed code throw until
 the new code ships in step 5 — **do steps 2→5 in one short maintenance
 window** (off-hours; ~10 min for a 7-person internal tool).
 
+> All commands below run from `twisted-treatz-inventory/server/` (where
+> `scripts/`, `prisma/` and `.env` live).
+
 > The drop of `brandText` (the final, destructive step) is intentionally NOT
 > committed as a Prisma migration folder — if it were, `prisma migrate deploy`
 > would apply it right after Migration A, before the backfill runs. Create it
 > as a migration only after backfill verification passes (step 7).
+
+> **Status:** steps 0–6 have been applied to production (the Brand table is
+> live and backfilled; see PRODUCT_EDIT_DEACTIVATE_RUNBOOK.md). Only step 7
+> — dropping `brandText` — is outstanding: the column is still declared in
+> `server/prisma/schema.prisma` and no drop migration has been created.
 
 ## Ordered steps
 

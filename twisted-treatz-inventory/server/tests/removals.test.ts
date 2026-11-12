@@ -28,7 +28,6 @@ const gummyBears = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
   mockPrisma.product.findUnique.mockResolvedValue(gummyBears);
   mockPrisma.product.update.mockResolvedValue({ ...gummyBears, currentQty: 15 });
   mockPrisma.removal.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
@@ -58,6 +57,7 @@ describe("POST /api/v1/removals — stock math", () => {
     );
     // Stock update and removal log must go through a transaction together
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction.mock.calls[0][0]).toHaveLength(2);
   });
 
   it("refuses to remove more than current stock", async () => {
