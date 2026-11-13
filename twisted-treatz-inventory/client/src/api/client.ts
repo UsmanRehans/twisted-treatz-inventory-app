@@ -19,7 +19,7 @@ export interface Product {
   usedIn: string | null;
   currentQty: number;
   alertThreshold: number;
-  unitPrice: string | null;
+  // No unitPrice: prices are admin-only and the API omits them for team tokens.
   active: boolean;
   highRisk: boolean;
   createdAt: string;
